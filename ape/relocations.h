@@ -86,14 +86,14 @@ ape_export_index = 0
 //	pointing into a string table by byte offset. That offset isn't
 //	something the assembler can work out across sections, so the
 //	strings are fixed width and the offset falls out of the index.
- .section .sort.rodata.macho.syms.2.1.\symbol,"a",@progbits
+ .section .macho.linkedit.1.syms.1.\symbol,"a",@progbits
 	.long	1 + ape_export_index * MACHO_STRTAB_STRIDE	// n_strx
 	.byte	0x0f			// n_type: N_SECT|N_EXT
 	.byte	1			// n_sect: __text
 	.short	0			// n_desc
 	.quad	\symbol			// n_value
  .previous
- .section .sort.rodata.macho.strs.2.1.\symbol,"a",@progbits
+ .section .macho.linkedit.2.strs.1.\symbol,"a",@progbits
 	.asciz	"_\symbol"
 	.org	MACHO_STRTAB_STRIDE,0	// pad this fragment to the stride
  .previous

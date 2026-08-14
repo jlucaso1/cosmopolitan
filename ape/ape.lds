@@ -370,6 +370,14 @@ SECTIONS {
     KEEP(*(SORT_BY_NAME(.initro.*)))
     KEEP(*(.initroepilogue))
     KEEP(*(SORT_BY_NAME(.sort.rodata.*)))
+
+    /*	Mach-O keeps its symbol and string tables in a segment of their
+	own, called __LINKEDIT, and dyld goes looking for it by name. It
+	has to be the last mapped thing in the file. */
+    . = ALIGN(. != 0 ? 8 : 0);
+    ape_linkedit_start = .;
+    KEEP(*(SORT_BY_NAME(.macho.linkedit.*)))
+    ape_linkedit_end = .;
     . = ALIGN(. != 0 ? CONSTANT(COMMONPAGESIZE) : 0); /* don't delete this line :o */
 
 /*END: read-only data that's only needed for initialization */
@@ -792,6 +800,14 @@ ape_idata_idtsize = LINK_WINDOWS ? ape_idata_idtend - ape_idata_idt : 0;
 	header of its own; the data directory only wants an rva into
 	something mapped. Both arrays are bracketed by end markers the
 	sorted fragments can't reach past. */
+/*	__RODATA has to stop where __LINKEDIT starts, since mach-o segments
+	can't overlap. */
+PFSTUB8(ape_macho_rodata_filesz, ape_linkedit_start - ADDR(.rodata));
+PFSTUB8(ape_macho_rodata_memsz, ape_linkedit_start - ADDR(.rodata));
+PFSTUB8(ape_linkedit_vaddr, ape_linkedit_start);
+PFSTUB8(ape_linkedit_memsz, ape_linkedit_end - ape_linkedit_start);
+PFSTUB8(ape_linkedit_offset, ape_linkedit_start - __executable_start);
+PFSTUB8(ape_linkedit_filesz, ape_linkedit_end - ape_linkedit_start);
 ape_pe_edatarva = RVA(ape_pe_edata);
 ape_pe_edatasize = ape_pe_edata_end - ape_pe_edata;
 ape_pe_edata_count = (ape_pe_edata_funcs_end - ape_pe_edata_funcs) / 4;

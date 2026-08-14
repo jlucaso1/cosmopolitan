@@ -887,7 +887,7 @@ ape_macho:
 	.long	MAC_CPU_NEXGEN32E_ALL
 #ifdef APE_DLL
 	.long	MAC_DYLIB
-	.long	7				// number of load commands
+	.long	8				// number of load commands
 	.long	90f-20f				// size of all load commands
 	.long	MAC_NOUNDEFS|MAC_DYLDLINK	// flags
 #else
@@ -937,17 +937,29 @@ ape_macho:
 #endif
 30:	.long	MAC_LC_SEGMENT_64
 	.long	40f-30b
+#ifdef APE_DLL
+	.ascin	"__RODATA",16
+	.stub	ape_rom_vaddr,quad
+	.stub	ape_macho_rodata_memsz,quad
+	.stub	ape_rom_offset,quad
+	.stub	ape_macho_rodata_filesz,quad
+#else
 	.ascin	"__RODATA",16
 	.stub	ape_rom_vaddr,quad
 	.stub	ape_rom_memsz,quad
 	.stub	ape_rom_offset,quad
 	.stub	ape_rom_filesz,quad
+#endif
 	.long	PROT_EXEC|PROT_READ|PROT_WRITE	// maxprot
 	.long	PROT_READ			// initprot
 	.long	0				// segment section count
 	.long	0				// flags
 40:	.long	MAC_LC_SEGMENT_64
+#ifdef APE_DLL
+	.long	45f-40b
+#else
 	.long	50f-40b
+#endif
 	.ascin	"__DATA",16
 	.stub	ape_ram_vaddr,quad
 	.stub	ape_ram_memsz,quad
@@ -957,6 +969,20 @@ ape_macho:
 	.long	PROT_READ|PROT_WRITE		// initprot
 	.long	0				// segment section count
 	.long	0				// flags
+#ifdef APE_DLL
+//	Where dyld expects a library's symbol and string tables to live.
+45:	.long	MAC_LC_SEGMENT_64
+	.long	50f-45b
+	.ascin	"__LINKEDIT",16
+	.stub	ape_linkedit_vaddr,quad
+	.stub	ape_linkedit_memsz,quad
+	.stub	ape_linkedit_offset,quad
+	.stub	ape_linkedit_filesz,quad
+	.long	PROT_READ			// maxprot
+	.long	PROT_READ			// initprot
+	.long	0				// segment section count
+	.long	0				// flags
+#endif
 50:	.long	MAC_LC_UUID
 	.long	60f-50b
 	.stub	ape_uuid1,quad
@@ -2051,20 +2077,20 @@ ape_dll_main:
 
 //	Brackets for the mach-o symbol and string tables the .export
 //	fragments land between.
-	.section .sort.rodata.macho.syms.2.0,"a",@progbits
+	.section .macho.linkedit.1.syms.0,"a",@progbits
 ape_macho_syms:
 	.endobj	ape_macho_syms,globl
 	.previous
-	.section .sort.rodata.macho.syms.2.2,"a",@progbits
+	.section .macho.linkedit.1.syms.2,"a",@progbits
 ape_macho_syms_end:
 	.endobj	ape_macho_syms_end,globl
 	.previous
-	.section .sort.rodata.macho.strs.2.0,"a",@progbits
+	.section .macho.linkedit.2.strs.0,"a",@progbits
 ape_macho_strs:
 	.byte	0			// strtab[0] is always a nul
 	.endobj	ape_macho_strs,globl
 	.previous
-	.section .sort.rodata.macho.strs.2.2,"a",@progbits
+	.section .macho.linkedit.2.strs.2,"a",@progbits
 ape_macho_strs_end:
 	.endobj	ape_macho_strs_end,globl
 	.previous
