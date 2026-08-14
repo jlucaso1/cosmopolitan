@@ -805,6 +805,17 @@ ape_pe_entry = LINK_WINDOWS ? WinMain : EfiMain;
 #endif
 #endif
 
+#if SupportsXnu() && defined(APE_DLL)
+/*	An empty symbol table. Populating it needs section records inside
+	__TEXT and __DATA, which the segments here declare none of, since
+	an executable never needed them. That is the remaining piece for a
+	dylib that exports anything. */
+PFSTUB4(ape_macho_symoff, 0);
+PFSTUB4(ape_macho_nsyms, 0);
+PFSTUB4(ape_macho_stroff, 0);
+PFSTUB4(ape_macho_strsize, 0);
+#endif
+
 #if SupportsXnu()
 SHSTUB2(ape_macho_dd_skip, RVA(ape_macho) / 8);
 SHSTUB2(ape_macho_dd_count, (ape_macho_end - ape_macho) / 8);

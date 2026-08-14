@@ -885,10 +885,17 @@ ape_macho:
 	.long	0xFEEDFACE+1
 	.long	MAC_CPU_NEXGEN32E
 	.long	MAC_CPU_NEXGEN32E_ALL
+#ifdef APE_DLL
+	.long	MAC_DYLIB
+	.long	7				// number of load commands
+	.long	90f-10f				// size of all load commands
+	.long	MAC_NOUNDEFS|MAC_DYLDLINK	// flags
+#else
 	.long	MAC_EXECUTE
 	.long	6				// number of load commands
 	.long	70f-10f				// size of all load commands
 	.long	MAC_NOUNDEFS			// flags
+#endif
 	.long	0				// reserved
 10:	.long	MAC_LC_SEGMENT_64
 	.long	20f-10b				// unmaps first page dir
@@ -932,6 +939,24 @@ ape_macho:
 	.long	60f-50b
 	.stub	ape_uuid1,quad
 	.stub	ape_uuid2,quad
+#ifdef APE_DLL
+//	A library has no entry thread. What it needs instead is an
+//	identity, and a symbol table dyld can bind against.
+60:	.long	MAC_LC_ID_DYLIB
+	.long	80f-60b				// cmdsize
+	.long	24				// name offset into this command
+	.long	0				// timestamp
+	.long	0x10000				// current version 1.0.0
+	.long	0x10000				// compatibility version
+	.ascin	"@rpath/cosmo.dylib",24
+80:	.long	MAC_LC_SYMTAB
+	.long	90f-80b				// cmdsize
+	.stub	ape_macho_symoff,long
+	.stub	ape_macho_nsyms,long
+	.stub	ape_macho_stroff,long
+	.stub	ape_macho_strsize,long
+90:
+#else
 60:	.long	MAC_LC_UNIXTHREAD
 	.long	70f-60b				// cmdsize
 	.long	MAC_THREAD_NEXGEN32E		// flavaflav
@@ -959,6 +984,7 @@ ape_macho:
 	.quad	0				// gs
 620:
 70:
+#endif /* APE_DLL */
 
 .endobj	ape_macho,globl,hidden
 .previous /* .macho */
@@ -1098,19 +1124,6 @@ ape_pe:	.ascin	"PE",4
 	.previous
 
 #ifdef APE_DLL
-//	Library entry point.
-//
-//	The New Technology calls this with the reason in %edx under the
-//	Microsoft convention, and a library that refuses to load returns
-//	zero. Returning one here means the runtime is not up yet: the
-//	host is expected to call into us for that, the way a .node addon
-//	does from napi_register_module_v1.
-	.text
-ape_dll_main:
-	mov	$1,%eax
-	ret
-	.endfn	ape_dll_main,globl
-
 //	Export directory.
 //
 //	Lives in .rdata rather than a section of its own: the data
@@ -1977,6 +1990,26 @@ DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR\n\
 PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER\n\
 TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR\n\
 PERFORMANCE OF THIS SOFTWARE."
+
+#ifdef APE_DLL
+//	Library entry point.
+//
+//	The New Technology calls this with the reason in %edx under the
+//	Microsoft convention, and a library that refuses to load returns
+//	zero. Returning one here means the runtime is not up yet: the
+//	host is expected to call into us for that, the way a .node addon
+//	does from napi_register_module_v1.
+	.text
+ape_dll_main:
+	mov	$1,%eax
+	ret
+	.endfn	ape_dll_main,globl
+
+//	The shell prologue in .head still wants a program entry to jump
+//	at. Nothing reaches it in a library, so point it here.
+	.weak	_start
+	.equ	_start,ape_dll_main
+#endif /* APE_DLL */
 
 .end
 
