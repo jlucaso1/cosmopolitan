@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "libc/atomic.h"
 #include "libc/dce.h"
 #include "libc/intrin/maps.h"
 #include "libc/intrin/weaken.h"
@@ -48,14 +49,22 @@ void _init(void);
 
 static bool cosmo_dll_booted;
 static char *cosmo_dll_argv[2];
+static char *cosmo_dll_environ[1];
+
+extern atomic_ulong __fake_process_signals;
 
 /**
  * Starts Cosmopolitan Libc inside a host process.
  *
+ * Must be __msabi, like everything a windows host calls into: cosmopolitan
+ * is compiled for System V, where rsi and rdi are caller saved, while the
+ * Microsoft convention has the callee preserve them. Getting that wrong
+ * corrupts the caller's frame rather than failing outright.
+ *
  * Safe to call more than once; only the first call does anything. Returns
  * true if the runtime is up.
  */
-bool cosmo_dll_boot(void) {
+__msabi bool cosmo_dll_boot(void) {
   if (cosmo_dll_booted)
     return true;
   cosmo_dll_booted = true;
@@ -73,6 +82,13 @@ bool cosmo_dll_boot(void) {
   struct CosmoPib *pib = __get_pib();
   pib->pid = GetCurrentProcessId();
 
+  // __enable_tls() reads both of these, and WinMain is what normally
+  // fills them in. Left null, the first is written through and the
+  // second is walked.
+  pib->sigpending = &__fake_process_signals;
+  if (!environ)
+    environ = cosmo_dll_environ;
+
   // decentralized init: system call dispatch, memory map, the lot. it
   // wants argc/argv/envp/auxv in r12 through r15, and a couple of the
   // fragments dereference argv, so give it something valid.
@@ -86,6 +102,8 @@ bool cosmo_dll_boot(void) {
                : /* no inputs */
                : "rdi", "rsi", "rax", "rcx", "rdx", "r8", "r9", "r10", "r11",
                  "memory", "cc");
+
+
 
   // these two live in cosmo.S, which nothing references in a library, so
   // the linker never pulls it in and their .init fragments never run
