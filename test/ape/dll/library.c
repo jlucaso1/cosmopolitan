@@ -86,7 +86,9 @@ static void say(const char *what) {
  * Brings the runtime up and returns, touching nothing else.
  */
 EXPORTED int cosmo_dll_init(void) {
-  return cosmo_dll_boot() ? 1 : 0;
+  int ok = cosmo_dll_boot() ? 1 : 0;
+  say("returned");
+  return ok;
 }
 
 EXPORTED int cosmo_dll_probe(char *out, int size) {

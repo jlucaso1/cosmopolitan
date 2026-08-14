@@ -123,6 +123,10 @@ __msabi bool cosmo_dll_boot(void) {
   // for it, and anything it isn't told about goes back to the host in
   // whatever state the libc left it.
   trace("pre", (uintptr_t)pib);
+  // WinInit() and the elf startup both record where the stack was before
+  // the runtime came up, and the memory manager reads it
+  __oldstack = (intptr_t)__builtin_frame_address(0);
+
   cosmo_dll_argv[0] = (char *)"cosmo";
   register long r12 asm("r12") = 1;
   register char **r13 asm("r13") = cosmo_dll_argv;
