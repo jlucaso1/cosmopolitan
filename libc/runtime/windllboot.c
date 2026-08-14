@@ -115,7 +115,14 @@ __msabi bool cosmo_dll_boot(void) {
                : "rdi", "rsi", "rax", "rcx", "rdx", "r8", "r9", "r10", "r11",
                  "memory", "cc");
 
-
+  // cosmo.S copies these out of the registers _init takes, and it isn't
+  // linked into a library either, so a constructor that reads them finds
+  // an argument count with nothing under it. Which is worse than finding
+  // nothing at all: program_invocation_short_name_init() checks __argc
+  // and then walks __argv.
+  __argc = 1;
+  __argv = cosmo_dll_argv;
+  __envp = environ;
 
   // these two live in cosmo.S, which nothing references in a library, so
   // the linker never pulls it in and their .init fragments never run
@@ -126,17 +133,8 @@ __msabi bool cosmo_dll_boot(void) {
   // already up, several of them making system calls. malloc is one of
   // them, and until it runs the allocator is a null pointer, which is
   // why this goes before anything that allocates.
-  for (init_f **f = __init_array_start; f < __init_array_end; ++f) {
-    {
-      char buf[22] = "ctor 0000000000000000\n";
-      uintptr_t v = (uintptr_t)*f;
-      for (int i = 0; i < 16; ++i)
-        buf[20 - i] = "0123456789abcdef"[(v >> (i * 4)) & 15];
-      uint32_t wrote;
-      WriteFile(GetStdHandle(kNtStdErrorHandle), buf, 22, &wrote, 0);
-    }
+  for (init_f **f = __init_array_start; f < __init_array_end; ++f)
     (*f)(1, cosmo_dll_argv, cosmo_dll_environ, 0);
-  }
 
   if (_weaken(__init_fds))
     _weaken(__init_fds)();
