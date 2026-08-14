@@ -887,7 +887,7 @@ ape_macho:
 	.long	MAC_CPU_NEXGEN32E_ALL
 #ifdef APE_DLL
 	.long	MAC_DYLIB
-	.long	6				// number of load commands
+	.long	7				// number of load commands
 	.long	90f-20f				// size of all load commands
 	.long	MAC_NOUNDEFS|MAC_DYLDLINK	// flags
 #else
@@ -972,11 +972,28 @@ ape_macho:
 	.long	0x10000				// compatibility version
 	.ascin	"@rpath/cosmo.dylib",24
 80:	.long	MAC_LC_SYMTAB
-	.long	90f-80b				// cmdsize
+	.long	85f-80b				// cmdsize
 	.stub	ape_macho_symoff,long
 	.stub	ape_macho_nsyms,long
 	.stub	ape_macho_stroff,long
 	.stub	ape_macho_strsize,long
+//	dyld reads the symbol table through this: which of the entries are
+//	local, which are defined and exported, which are undefined. Without
+//	it there is nothing telling it our symbols are the exported ones.
+85:	.long	MAC_LC_DYSYMTAB
+	.long	90f-85b				// cmdsize
+	.long	0				// ilocalsym
+	.long	0				// nlocalsym
+	.long	0				// iextdefsym
+	.stub	ape_macho_nsyms,long		// nextdefsym
+	.stub	ape_macho_nsyms,long		// iundefsym
+	.long	0				// nundefsym
+	.long	0,0				// toc
+	.long	0,0				// module table
+	.long	0,0				// referenced symbols
+	.long	0,0				// indirect symbols
+	.long	0,0				// external relocations
+	.long	0,0				// local relocations
 90:
 #else
 60:	.long	MAC_LC_UNIXTHREAD
