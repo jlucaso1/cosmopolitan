@@ -887,8 +887,8 @@ ape_macho:
 	.long	MAC_CPU_NEXGEN32E_ALL
 #ifdef APE_DLL
 	.long	MAC_DYLIB
-	.long	7				// number of load commands
-	.long	90f-10f				// size of all load commands
+	.long	6				// number of load commands
+	.long	90f-20f				// size of all load commands
 	.long	MAC_NOUNDEFS|MAC_DYLDLINK	// flags
 #else
 	.long	MAC_EXECUTE
@@ -897,11 +897,16 @@ ape_macho:
 	.long	MAC_NOUNDEFS			// flags
 #endif
 	.long	0				// reserved
+#ifndef APE_DLL
+//	__PAGEZERO belongs to a program. dyld will try to map a library's
+//	segments wherever it's told, and being told to map one at zero is
+//	how you get a segfault before anything runs.
 10:	.long	MAC_LC_SEGMENT_64
 	.long	20f-10b				// unmaps first page dir
 	.ascin	"__PAGEZERO",16			// consistent with linux
 	.quad	0,0x200000,0,0			// which forbids mem <2m
 	.long	0,0,0,0
+#endif
 20:	.long	MAC_LC_SEGMENT_64
 	.long	30f-20b
 	.ascin	"__TEXT",16

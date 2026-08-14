@@ -36,6 +36,9 @@ static const char *why(void) {
 #endif
 
 int main(void) {
+  // unbuffered, so a crash in the loader still leaves a trail
+  setvbuf(stdout, 0, _IONBF, 0);
+  printf("loading %s\n", LIBRARY);
   void *h = load(LIBRARY);
   if (!h) {
     printf("FAIL: could not load %s: %s\n", LIBRARY, why());
