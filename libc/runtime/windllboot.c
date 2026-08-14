@@ -114,6 +114,12 @@ __msabi bool cosmo_dll_boot(void) {
   // decentralized init: system call dispatch, memory map, the lot. it
   // wants argc/argv/envp/auxv in r12 through r15, and a couple of the
   // fragments dereference argv, so give it something valid.
+  //
+  // The clobber list has to be honest about every register the fragments
+  // touch, and there are a lot of them. This is an __msabi function, so
+  // the compiler is holding the caller's rsi, rdi and xmm6 through xmm15
+  // for it, and anything it isn't told about goes back to the host in
+  // whatever state the libc left it.
   trace("pre", (uintptr_t)pib);
   cosmo_dll_argv[0] = (char *)"cosmo";
   register long r12 asm("r12") = 1;
@@ -123,8 +129,10 @@ __msabi bool cosmo_dll_boot(void) {
   asm volatile("call\t_init"
                : "+r"(r12), "+r"(r13), "+r"(r14), "+r"(r15)
                : /* no inputs */
-               : "rdi", "rsi", "rax", "rcx", "rdx", "r8", "r9", "r10", "r11",
-                 "memory", "cc");
+               : "rdi", "rsi", "rbx", "rax", "rcx", "rdx", "r8", "r9", "r10",
+                 "r11", "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6",
+                 "xmm7", "xmm8", "xmm9", "xmm10", "xmm11", "xmm12", "xmm13",
+                 "xmm14", "xmm15", "memory", "cc");
 
   // cosmo.S copies these out of the registers _init takes, and it isn't
   // linked into a library either, so a constructor that reads them finds
