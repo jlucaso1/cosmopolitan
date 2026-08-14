@@ -236,9 +236,21 @@ SECTIONS {
   .head SEGMENT_START("text-segment", IMAGE_BASE_VIRTUAL) + SKEW : AT(IMAGE_BASE_REAL) {
     __executable_start = .;
 
+#if defined(APE_DLL) && SupportsXnu() && !SupportsWindows()
+    /*	A dylib has to begin with its own header: dyld reads the magic at
+	offset zero, and unlike The New Technology there is no prologue it
+	can share those bytes with. So in this configuration the mach-o
+	goes first and the shell trick is left out. */
+    KEEP(*(.macho))
+    . = ALIGN(. != 0 ? __SIZEOF_POINTER__ : 0);
+    ape_macho_end = .;
+#endif
+
     /* Real Mode */
+#if !(defined(APE_DLL) && SupportsXnu() && !SupportsWindows())
     KEEP(*(.head))
     KEEP(*(.text.head))
+#endif
 
     /* Executable & Linkable Format */
     . = ALIGN(. != 0 ? __SIZEOF_POINTER__ : 0);
@@ -259,9 +271,11 @@ SECTIONS {
     ape_pe_sections_end = .;
 
     /* Mach-O */
+#if !(defined(APE_DLL) && SupportsXnu() && !SupportsWindows())
     KEEP(*(.macho))
     . = ALIGN(. != 0 ? __SIZEOF_POINTER__ : 0);
     ape_macho_end = .;
+#endif
 
     /* APE loader */
     KEEP(*(.ape.loader))
@@ -821,7 +835,11 @@ SHSTUB2(ape_macho_dd_skip, RVA(ape_macho) / 8);
 SHSTUB2(ape_macho_dd_count, (ape_macho_end - ape_macho) / 8);
 #endif
 
+#if !(defined(APE_DLL) && SupportsXnu() && !SupportsWindows())
+/*	In the dylib configuration the mach-o header takes offset zero, so
+	the mz prologue isn't there to sit at the image base. */
 ASSERT(DEFINED(ape_mz) ? ape_mz == IMAGE_BASE_VIRTUAL : 1, "linker panic");
+#endif
 ASSERT((DEFINED(__init_bss_end) ? __init_bss_end : 0) % __SIZEOF_POINTER__ == 0,
        "__init_bss misalign");
 ASSERT(((DEFINED(__init_rodata_end) ? __init_rodata_end : 0) %
