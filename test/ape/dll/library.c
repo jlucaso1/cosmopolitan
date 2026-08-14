@@ -35,6 +35,7 @@
 #include "libc/dce.h"
 #include "libc/mem/mem.h"
 #include "libc/nt/thunk/msabi.h"
+#include "libc/runtime/runtime.h"
 #include "libc/stdio/stdio.h"
 #include "libc/str/str.h"
 
@@ -73,6 +74,13 @@ __msabi bool cosmo_dll_boot(void);
  */
 EXPORTED int cosmo_dll_probe(char *out, int size) {
   cosmo_dll_boot();
+  // so that a fault in here says where it was, rather than leaving the
+  // exit status to be interpreted
+  static bool reporting;
+  if (!reporting) {
+    reporting = true;
+    ShowCrashReports();
+  }
   int pid = getpid();
   char *scratch = malloc(128);
   if (!scratch)
