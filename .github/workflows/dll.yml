@@ -1,9 +1,15 @@
 name: shared objects
 
-# Builds the ape shared object test on linux, where the cosmopolitan
-# toolchain runs, then loads the result on the operating systems it was
-# emitted for. Those are the only machines that can say whether the PE and
-# mach-o headers are right, since nothing on linux can load either format.
+# Cosmopolitan as a shared library, on the three hosts that can load one.
+#
+# The PE and mach-o images are built on linux, where the toolchain runs,
+# and carried to the machines they were emitted for. Those are the only
+# ones that can say whether the headers are right, since nothing on linux
+# loads either format.
+#
+# The ELF side is a different test, and the harder one: there the libc has
+# to be built as position independent code and then live inside a process
+# whose libc is somebody else's.
 
 env:
   COSMOCC_VERSION: 3.9.2
@@ -54,6 +60,35 @@ jobs:
           path: |
             o/dlltest/cosmo_dll_test.dll
             o/dlltest/cosmo_dll_test.dylib
+
+  linux:
+    runs-on: ubuntu-latest
+    # Most of this is building the libc twice over: as position independent
+    # code, which is a full build of its own.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: fetch the toolchain
+        run: |
+          build/download-cosmocc.sh \
+            ".cosmocc/${COSMOCC_VERSION}" \
+            "${COSMOCC_VERSION}" \
+            "${COSMOCC_SHA256}"
+
+      - name: build the libc as a shared object
+        run: test/ape/dso/build.sh
+
+      - name: nothing absolute is left in it
+        run: |
+          # an ET_DYN link is what proves this, and it already happened,
+          # but a text relocation means it only got there by making the
+          # loader write to the code, which is not the same thing
+          ! readelf -d o/dsotest/cosmo_dso_test.so | grep -q TEXTREL
+          readelf -h o/dsotest/cosmo_dso_test.so | grep -q 'DYN'
+
+      - name: load it
+        run: o/dsotest/host o/dsotest/cosmo_dso_test.so
 
   windows:
     needs: build

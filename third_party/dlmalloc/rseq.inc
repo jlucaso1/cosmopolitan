@@ -23,6 +23,17 @@
 #define ALLOCATED ((struct Chunk *)-23l)
 #define HAVE_RSEQ (!IsTiny() && SupportsLinux() && __get_rseq()->cpu_id >= 0)
 
+// The critical section descriptor holds addresses the kernel goes and
+// dereferences, so it can't be pc relative like the code around it. A
+// shared object doesn't know them until it's loaded, which makes the
+// descriptor something the loader writes rather than something the
+// linker finishes.
+#ifdef COSMO_DSO
+#define RSEQ_CS_SECTION ".data.rel.ro.rseq,\"aw\",@progbits"
+#else
+#define RSEQ_CS_SECTION ".rodata.rseq,\"a\",@progbits"
+#endif
+
 struct Chunk {
   struct Chunk *next;
   unsigned char flindex;
@@ -69,7 +80,7 @@ static const unsigned char kPickSize[CHUNK_MAX + 1] = {
 
 static inline void push_chunk(struct Chunk *chunk, unsigned char flindex) {
 #ifdef __x86_64__
-  asm volatile(".pushsection .rodata.rseq,\"a\",@progbits\n"
+  asm volatile(".pushsection " RSEQ_CS_SECTION "\n"
                "	.balign	32\n"
                "300:	.long	0\n"                  // rseq_cs::version
                "	.long	0\n"                  // rseq_cs::flags
@@ -93,7 +104,7 @@ static inline void push_chunk(struct Chunk *chunk, unsigned char flindex) {
                : "r"(&chunks[0].freelist[flindex]), "r"(chunk), "r"(__get_rseq())
                : "rcx", "rdx", "memory");
 #elifdef __aarch64__
-  asm volatile(".pushsection .rodata.rseq,\"a\",@progbits\n"
+  asm volatile(".pushsection " RSEQ_CS_SECTION "\n"
                "	.balign	32\n"
                "300:	.long	0\n"                  // rseq_cs::version
                "	.long	0\n"                  // rseq_cs::flags
@@ -124,7 +135,7 @@ static inline void push_chunk(struct Chunk *chunk, unsigned char flindex) {
 static inline struct Chunk *pop_chunk(unsigned char flindex) {
   struct Chunk *chunk;
 #ifdef __x86_64__
-  asm volatile(".pushsection .rodata.rseq,\"a\",@progbits\n"
+  asm volatile(".pushsection " RSEQ_CS_SECTION "\n"
                "	.balign	32\n"
                "300:	.long	0\n"                  // rseq_cs::version
                "	.long	0\n"                  // rseq_cs::flags
@@ -150,7 +161,7 @@ static inline struct Chunk *pop_chunk(unsigned char flindex) {
                : "r"(__get_rseq()), "r"(&chunks[0].freelist[flindex])
                : "rcx", "rdx", "memory");
 #elifdef __aarch64__
-  asm volatile(".pushsection .rodata.rseq,\"a\",@progbits\n"
+  asm volatile(".pushsection " RSEQ_CS_SECTION "\n"
                "	.balign	32\n"
                "300:	.long	0\n"                  // rseq_cs::version
                "	.long	0\n"                  // rseq_cs::flags
