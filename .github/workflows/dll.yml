@@ -1,0 +1,80 @@
+name: shared objects
+
+# Builds the ape shared object test on linux, where the cosmopolitan
+# toolchain runs, then loads the result on the operating systems it was
+# emitted for. Those are the only machines that can say whether the PE and
+# mach-o headers are right, since nothing on linux can load either format.
+
+env:
+  COSMOCC_VERSION: 3.9.2
+  COSMOCC_SHA256: f4ff13af65fcd309f3f1cfd04275996fb7f72a4897726628a8c9cf732e850193
+
+on:
+  push:
+    branches: ["master", "ape-dso-poc", "dll"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: fetch the toolchain
+        run: |
+          build/download-cosmocc.sh \
+            ".cosmocc/${COSMOCC_VERSION}" \
+            "${COSMOCC_VERSION}" \
+            "${COSMOCC_SHA256}"
+
+      - name: build the dll and the dylib
+        run: |
+          test/ape/dll/build.sh windows
+          test/ape/dll/build.sh macos
+
+      - name: check what came out
+        run: |
+          # a PE image begins with MZ, a mach-o with its own magic
+          test "$(head -c2 o/dlltest/cosmo_dll_test.dll)" = "MZ"
+          head -c4 o/dlltest/cosmo_dll_test.dylib | od -An -tx1 | grep -q 'cf fa ed fe'
+          # and the dll has to say it's a library, not a program
+          objdump -f o/dlltest/cosmo_dll_test.dll | grep -q DLL
+          echo "headers look right"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shared-objects
+          path: |
+            o/dlltest/cosmo_dll_test.dll
+            o/dlltest/cosmo_dll_test.dylib
+
+  windows:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared-objects
+      - name: load it
+        shell: cmd
+        run: |
+          cl /nologo /Fe:host.exe test\ape\dll\host.c || exit /b 1
+          host.exe || exit /b 1
+
+  macos:
+    needs: build
+    # intel, because the library ape emits today is x86-64. apple silicon
+    # needs the aarch64 path and a code signature, neither of which exists
+    # yet, so there is nothing to run there.
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared-objects
+      - name: load it
+        run: |
+          clang -o host test/ape/dll/host.c
+          ./host
