@@ -99,6 +99,14 @@ int main(void) {
   // guest system call whose right answer this process already knows,
   // and the text around it came out of the guest's own snprintf and
   // heap.
+  int (*init)(void) = (int (*)(void))sym(h, "cosmo_dll_init");
+  if (!init) {
+    printf("FAIL: could not find cosmo_dll_init: %s\n", why());
+    return 4;
+  }
+  printf("ok: the runtime booted, returning %d\n", init());
+  printf("ok: the library still answers: %d\n", add(1, 2));
+
   int (*probe)(char *, int) = (int (*)(char *, int))sym(h, "cosmo_dll_probe");
   if (!probe) {
     printf("FAIL: could not find cosmo_dll_probe: %s\n", why());

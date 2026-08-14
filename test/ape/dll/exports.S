@@ -26,6 +26,7 @@
 
 	.export	cosmo_dll_add
 #if SupportsWindows()
+	.export	cosmo_dll_init
 	.export	cosmo_dll_probe
 	.export	cosmo_dll_thread_fini
 	.export	cosmo_dll_thread_init

@@ -82,6 +82,13 @@ static void say(const char *what) {
   asm volatile("" ::: "memory");
 }
 
+/**
+ * Brings the runtime up and returns, touching nothing else.
+ */
+EXPORTED int cosmo_dll_init(void) {
+  return cosmo_dll_boot() ? 1 : 0;
+}
+
 EXPORTED int cosmo_dll_probe(char *out, int size) {
   say("enter");
   cosmo_dll_boot();
