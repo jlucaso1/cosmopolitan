@@ -27,12 +27,19 @@
  * On windows every entry point has to be __msabi. Cosmopolitan is
  * compiled for System V, where rsi and rdi are caller saved, while the
  * Microsoft convention has the callee preserve them, so a host calling
- * straight in corrupts its own frame.
+ * straight in corrupts its own frame. Elsewhere the host is already
+ * speaking System V and nothing needs to be said.
  */
+
+#include "libc/dce.h"
 
 #ifdef __x86_64__
 
+#if SupportsWindows()
 #define EXPORTED __attribute__((__ms_abi__))
+#else
+#define EXPORTED
+#endif
 
 /**
  * Adds two numbers, touching nothing.
