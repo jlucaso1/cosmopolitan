@@ -61,10 +61,18 @@ jobs:
         with:
           name: shared-objects
       - name: load it
-        shell: cmd
+        shell: bash
         run: |
-          cl /nologo /Fe:host.exe test\ape\dll\host.c || exit /b 1
-          host.exe || exit /b 1
+          # msvc needs the developer environment set up before cl is on
+          # PATH; the runner ships clang and gcc ready to use, and the
+          # host program is plain win32, so either will do
+          for cc in clang gcc cc; do
+            if command -v $cc >/dev/null; then CC=$cc; break; fi
+          done
+          test -n "${CC:-}" || { echo "no c compiler on this runner"; exit 1; }
+          echo "building the host with $CC"
+          "$CC" -o host.exe test/ape/dll/host.c
+          ./host.exe
 
   macos:
     needs: build
