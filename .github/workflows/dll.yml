@@ -41,6 +41,9 @@ jobs:
           # the dll has to say it's a library rather than a program, which
           # lives in the pe characteristics word, so -p and not -f
           objdump -p o/dlltest/cosmo_dll_test.dll | grep -q DLL
+          # the dylib has to carry an export trie, since that and not the
+          # symbol table is what dlsym reads
+          grep -q cosmo_dll_add o/dlltest/cosmo_dll_test.dylib
           # nothing here reads mach-o, so the dylib is only checked for its
           # magic. the macos job proves the rest by loading it.
           echo "headers look right"
@@ -94,6 +97,8 @@ jobs:
           otool -l cosmo_dll_test.dylib | head -60 || true
           echo "--- exports as dyld sees them ---"
           dyld_info -exports cosmo_dll_test.dylib || true
+          # dlsym is answered from the trie, so an empty listing above is
+          # the failure to look at even when nm below has plenty to say
           nm -gU cosmo_dll_test.dylib || true
           echo "--- now try to use it ---"
           clang -arch x86_64 -o host test/ape/dll/host.c

@@ -54,4 +54,10 @@ $LD -static -nostdlib -no-pie -z noexecstack -z norelro --gc-sections \
 
 $OBJCOPY -S -O binary "$OUT/cosmo_dll_test.dbg" "$OUT/cosmo_dll_test.$SUFFIX"
 
+# the export trie holds addresses as uleb128, which nothing before this
+# point can encode
+if [ "$TARGET" = macos ]; then
+  python3 test/ape/dll/trieaddrs.py "$OUT/cosmo_dll_test.$SUFFIX"
+fi
+
 ls -l "$OUT/cosmo_dll_test.$SUFFIX"

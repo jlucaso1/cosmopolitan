@@ -24,3 +24,4 @@
 //	derived from.
 
 	.export	cosmo_dll_add
+	.exports_end

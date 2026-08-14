@@ -887,7 +887,7 @@ ape_macho:
 	.long	MAC_CPU_NEXGEN32E_ALL
 #ifdef APE_DLL
 	.long	MAC_DYLIB
-	.long	8				// number of load commands
+	.long	9				// number of load commands
 	.long	90f-20f				// size of all load commands
 	.long	MAC_NOUNDEFS|MAC_DYLDLINK	// flags
 #else
@@ -1007,7 +1007,7 @@ ape_macho:
 //	local, which are defined and exported, which are undefined. Without
 //	it there is nothing telling it our symbols are the exported ones.
 85:	.long	MAC_LC_DYSYMTAB
-	.long	90f-85b				// cmdsize
+	.long	86f-85b				// cmdsize
 	.long	0				// ilocalsym
 	.long	0				// nlocalsym
 	.long	0				// iextdefsym
@@ -1020,6 +1020,13 @@ ape_macho:
 	.long	0,0				// indirect symbols
 	.long	0,0				// external relocations
 	.long	0,0				// local relocations
+//	dlsym() is answered from the export trie, not the symbol table.
+//	Without this a library loads, and nm can even list what it has,
+//	but every lookup against it comes back empty handed.
+86:	.long	MAC_LC_DYLD_EXPORTS_TRIE
+	.long	90f-86b				// cmdsize
+	.stub	ape_macho_trieoff,long
+	.stub	ape_macho_triesize,long
 90:
 #else
 60:	.long	MAC_LC_UNIXTHREAD
