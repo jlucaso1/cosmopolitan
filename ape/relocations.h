@@ -62,6 +62,10 @@
 //	for free.
 //
 //	@see	ape/ape.S for the directory this feeds
+//	Mach-O string table entries are fixed width so their offsets can be
+//	computed from the index. Sixty four bytes fits any reasonable
+//	exported name with the leading underscore mach-o expects.
+#define MACHO_STRTAB_STRIDE 64
 ape_export_index = 0
 .macro	.export	symbol:req
  .section .sort.rodata.pe.edata.2.1.\symbol,"a",@progbits
@@ -74,11 +78,26 @@ ape_export_index = 0
  .section .sort.rodata.pe.edata.4.1.\symbol,"a",@progbits
 	.short	ape_export_index
  .previous
- ape_export_index = ape_export_index + 1
  .section .sort.rodata.pe.edata.6.1.\symbol,"a",@progbits
 .Lpe.name.\symbol:
 	.asciz	"\symbol"
  .previous
+//	The mach-o side wants the same thing shaped differently: an nlist
+//	pointing into a string table by byte offset. That offset isn't
+//	something the assembler can work out across sections, so the
+//	strings are fixed width and the offset falls out of the index.
+ .section .sort.rodata.macho.syms.2.1.\symbol,"a",@progbits
+	.long	1 + ape_export_index * MACHO_STRTAB_STRIDE	// n_strx
+	.byte	0x0f			// n_type: N_SECT|N_EXT
+	.byte	1			// n_sect: __text
+	.short	0			// n_desc
+	.quad	\symbol			// n_value
+ .previous
+ .section .sort.rodata.macho.strs.2.1.\symbol,"a",@progbits
+	.asciz	"_\symbol"
+	.org	MACHO_STRTAB_STRIDE,0	// pad this fragment to the stride
+ .previous
+ ape_export_index = ape_export_index + 1
 .endm
 #endif /* __ASSEMBLER__ */
 

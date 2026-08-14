@@ -911,8 +911,25 @@ ape_macho:
 	.stub	ape_cod_filesz,quad
 	.long	PROT_EXEC|PROT_READ|PROT_WRITE	// maxprot
 	.long	PROT_EXEC|PROT_READ		// initprot
+#ifdef APE_DLL
+//	A symbol table names the section its symbols live in, so __TEXT
+//	has to declare one. An executable never needed any.
+	.long	1				// segment section count
+	.long	0				// flags
+	.ascin	"__text",16			// sectname
+	.ascin	"__TEXT",16			// segname
+	.stub	ape_text_vaddr,quad		// addr
+	.stub	ape_text_memsz,quad		// size
+	.stub	ape_text_offset,long		// offset
+	.long	4				// align, 2**4
+	.long	0				// reloff
+	.long	0				// nreloc
+	.long	MAC_S_ATTR_PURE_INSTRUCTIONS|MAC_S_ATTR_SOME_INSTRUCTIONS
+	.long	0,0,0				// reserved, three of them on 64 bit
+#else
 	.long	0				// segment section count
 	.long	0				// flags
+#endif
 30:	.long	MAC_LC_SEGMENT_64
 	.long	40f-30b
 	.ascin	"__RODATA",16
@@ -2009,6 +2026,26 @@ ape_dll_main:
 //	at. Nothing reaches it in a library, so point it here.
 	.weak	_start
 	.equ	_start,ape_dll_main
+
+//	Brackets for the mach-o symbol and string tables the .export
+//	fragments land between.
+	.section .sort.rodata.macho.syms.2.0,"a",@progbits
+ape_macho_syms:
+	.endobj	ape_macho_syms,globl
+	.previous
+	.section .sort.rodata.macho.syms.2.2,"a",@progbits
+ape_macho_syms_end:
+	.endobj	ape_macho_syms_end,globl
+	.previous
+	.section .sort.rodata.macho.strs.2.0,"a",@progbits
+ape_macho_strs:
+	.byte	0			// strtab[0] is always a nul
+	.endobj	ape_macho_strs,globl
+	.previous
+	.section .sort.rodata.macho.strs.2.2,"a",@progbits
+ape_macho_strs_end:
+	.endobj	ape_macho_strs_end,globl
+	.previous
 #endif /* APE_DLL */
 
 .end
