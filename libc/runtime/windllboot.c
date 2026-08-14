@@ -74,6 +74,7 @@ static char *cosmo_dll_argv[2];
 static char *cosmo_dll_environ[1];
 
 extern atomic_ulong __fake_process_signals;
+extern bool __cosmo_hosted;
 
 /**
  * Starts Cosmopolitan Libc inside a host process.
@@ -92,6 +93,7 @@ __msabi bool cosmo_dll_boot(void) {
   cosmo_dll_booted = true;
 
   cosmo_dll_hostos = _HOSTWINDOWS;
+  __cosmo_hosted = true;
   __tls_enabled = false;
 
   struct NtSystemInfo si;
