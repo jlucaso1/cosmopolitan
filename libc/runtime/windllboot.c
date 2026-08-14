@@ -58,6 +58,16 @@ typedef int init_f(int, char **, char **, unsigned long *);
 extern init_f *__init_array_start[] __attribute__((__weak__));
 extern init_f *__init_array_end[] __attribute__((__weak__));
 
+static void trace(const char *tag, uintptr_t v) {
+  char buf[32] = "boot ....  0000000000000000\n";
+  for (int i = 0; i < 4 && tag[i]; ++i)
+    buf[5 + i] = tag[i];
+  for (int i = 0; i < 16; ++i)
+    buf[25 - i] = "0123456789abcdef"[(v >> (i * 4)) & 15];
+  uint32_t wrote;
+  WriteFile(GetStdHandle(kNtStdErrorHandle), buf, 28, &wrote, 0);
+}
+
 static bool cosmo_dll_booted;
 static struct CosmoTib *cosmo_dll_main_tib;
 static char *cosmo_dll_argv[2];
@@ -104,6 +114,7 @@ __msabi bool cosmo_dll_boot(void) {
   // decentralized init: system call dispatch, memory map, the lot. it
   // wants argc/argv/envp/auxv in r12 through r15, and a couple of the
   // fragments dereference argv, so give it something valid.
+  trace("pre", (uintptr_t)pib);
   cosmo_dll_argv[0] = (char *)"cosmo";
   register long r12 asm("r12") = 1;
   register char **r13 asm("r13") = cosmo_dll_argv;
@@ -120,12 +131,14 @@ __msabi bool cosmo_dll_boot(void) {
   // an argument count with nothing under it. Which is worse than finding
   // nothing at all: program_invocation_short_name_init() checks __argc
   // and then walks __argv.
+  trace("init", 0);
   __argc = 1;
   __argv = cosmo_dll_argv;
   __envp = environ;
 
   // these two live in cosmo.S, which nothing references in a library, so
   // the linker never pulls it in and their .init fragments never run
+  trace("tls", 0);
   __enable_tls();
 
   // The constructors, which nothing else is going to run: a PE image has
@@ -133,11 +146,15 @@ __msabi bool cosmo_dll_boot(void) {
   // already up, several of them making system calls. malloc is one of
   // them, and until it runs the allocator is a null pointer, which is
   // why this goes before anything that allocates.
-  for (init_f **f = __init_array_start; f < __init_array_end; ++f)
+  for (init_f **f = __init_array_start; f < __init_array_end; ++f) {
+    trace("ctor", (uintptr_t)*f);
     (*f)(1, cosmo_dll_argv, cosmo_dll_environ, 0);
+  }
 
+  trace("fds", 0);
   if (_weaken(__init_fds))
     _weaken(__init_fds)();
+  trace("done", 0);
 
   cosmo_dll_main_tib = __get_tls();
   return true;
