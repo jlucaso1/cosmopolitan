@@ -5,6 +5,7 @@
 // emitted, rather than that cosmopolitan agrees with itself.
 
 #include <stdio.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -59,5 +60,31 @@ int main(void) {
     return 3;
   }
   printf("ok: cosmo_dll_add(20, 22) = %d\n", got);
+
+#ifdef _WIN32
+  // The library carries the whole libc on this platform, so it can be
+  // asked something only a running runtime can answer. The pid is a
+  // guest system call whose right answer this process already knows,
+  // and the text around it came out of the guest's own snprintf and
+  // heap.
+  int (*probe)(char *, int) = (int (*)(char *, int))sym(h, "cosmo_dll_probe");
+  if (!probe) {
+    printf("FAIL: could not find cosmo_dll_probe: %s\n", why());
+    return 4;
+  }
+  char buf[128] = "";
+  int pid = probe(buf, sizeof(buf));
+  if (pid != (int)GetCurrentProcessId()) {
+    printf("FAIL: guest getpid said %d, this process is %d\n", pid,
+           (int)GetCurrentProcessId());
+    return 5;
+  }
+  if (!strstr(buf, "cosmo libc says")) {
+    printf("FAIL: guest snprintf produced \"%s\"\n", buf);
+    return 6;
+  }
+  printf("ok: the guest runtime is up: %s\n", buf);
+#endif
+
   return 0;
 }

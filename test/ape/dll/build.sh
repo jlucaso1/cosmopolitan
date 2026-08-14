@@ -9,10 +9,14 @@
 # APE_DLL rather than a different toolchain. The image comes out of the
 # elf link with objcopy, the same way a .com does.
 #
-# The support vector is narrowed to one host on purpose. A library is
-# loaded by a specific operating system, so there is nothing for the
-# other hosts' startup code to do, and leaving it in only drags in the
-# bare metal boot path.
+# The windows library carries the whole libc, so that the test can ask it
+# something only a running runtime can answer. That needs a build of the
+# libc with every host still in it, since narrowing the support vector is
+# a property of how the libc itself was compiled.
+#
+# The mach-o one is still on its own. A dylib gets slid by dyld, and
+# nothing here emits the rebase information that would let the libc's
+# absolute addresses survive that, so for now it stays freestanding.
 
 set -eu
 
@@ -21,7 +25,7 @@ COSMOCC=${COSMOCC:-.cosmocc/3.9.2}
 OUT=${OUT:-o/dlltest}
 
 case "$TARGET" in
-  windows) VECTOR=4; SUFFIX=dll ;;
+  windows) VECTOR=; SUFFIX=dll ;;
   macos)   VECTOR=8; SUFFIX=dylib ;;
   *) echo "usage: $0 windows|macos" >&2; exit 1 ;;
 esac
@@ -32,7 +36,16 @@ OBJCOPY="$COSMOCC/bin/x86_64-linux-cosmo-objcopy"
 
 mkdir -p "$OUT"
 
-CFLAGS="-DAPE_DLL -DSUPPORT_VECTOR=$VECTOR -D_COSMO_SOURCE \
+LIBC=
+if [ -z "$VECTOR" ]; then
+  LIBC=${LIBC_A:-o//cosmopolitan.a}
+  [ -f "$LIBC" ] || make -j"$(nproc)" MODE= "$LIBC"
+  VECTORFLAG=
+else
+  VECTORFLAG=-DSUPPORT_VECTOR=$VECTOR
+fi
+
+CFLAGS="-DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE \
         -nostdinc -iquote. -I. -isystem libc/isystem \
         -include libc/integral/normalize.inc \
         -O2 -fno-pie -mno-red-zone"
@@ -44,13 +57,20 @@ $CC $CFLAGS -c -o "$OUT/exports.o" test/ape/dll/exports.S
 # shellcheck disable=SC2086
 $CC $CFLAGS -std=gnu2x -c -o "$OUT/library.o" test/ape/dll/library.c
 
-$CC -D__LINKER__ -DAPE_DLL -DSUPPORT_VECTOR=$VECTOR -D_COSMO_SOURCE \
+BOOT=
+if [ -n "$LIBC" ]; then
+  # shellcheck disable=SC2086
+  $CC $CFLAGS -std=gnu2x -c -o "$OUT/boot.o" libc/runtime/windllboot.c
+  BOOT="$OUT/boot.o"
+fi
+
+$CC -D__LINKER__ -DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE \
     -E -P -xc -nostdinc -iquote. -I. -isystem libc/isystem \
     -o "$OUT/ape.lds" ape/ape.lds
 
 $LD -static -nostdlib -no-pie -z noexecstack -z norelro --gc-sections \
     -T "$OUT/ape.lds" -o "$OUT/cosmo_dll_test.dbg" \
-    "$OUT/ape.o" "$OUT/exports.o" "$OUT/library.o"
+    "$OUT/ape.o" "$OUT/exports.o" "$OUT/library.o" $BOOT $LIBC
 
 $OBJCOPY -S -O binary "$OUT/cosmo_dll_test.dbg" "$OUT/cosmo_dll_test.$SUFFIX"
 

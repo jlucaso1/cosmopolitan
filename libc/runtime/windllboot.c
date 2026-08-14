@@ -47,6 +47,10 @@ extern char cosmo_dll_hostos asm("__hostos");
 
 void _init(void);
 
+typedef int init_f(int, char **, char **, unsigned long *);
+extern init_f *__init_array_start[];
+extern init_f *__init_array_end[];
+
 static bool cosmo_dll_booted;
 static char *cosmo_dll_argv[2];
 static char *cosmo_dll_environ[1];
@@ -108,6 +112,13 @@ __msabi bool cosmo_dll_boot(void) {
   // these two live in cosmo.S, which nothing references in a library, so
   // the linker never pulls it in and their .init fragments never run
   __enable_tls();
+
+  // And now the constructors, which nothing else is going to run: a PE
+  // image has no equivalent of DT_INIT_ARRAY, and they assume a runtime
+  // that is already up, several of them making system calls. malloc is
+  // one of them, and until it runs the allocator is a null pointer.
+  for (init_f **f = __init_array_start; f != __init_array_end; ++f)
+    (*f)(1, cosmo_dll_argv, cosmo_dll_environ, 0);
   if (_weaken(__init_fds))
     _weaken(__init_fds)();
 

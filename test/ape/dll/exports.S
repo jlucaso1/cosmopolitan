@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "ape/relocations.h"
+#include "libc/dce.h"
 
 //	What the library publishes. These have to be listed in the order the
 //	linker sorts them, which is alphabetical, because the index each one
@@ -24,4 +25,7 @@
 //	derived from.
 
 	.export	cosmo_dll_add
+#if SupportsWindows()
+	.export	cosmo_dll_probe
+#endif
 	.exports_end

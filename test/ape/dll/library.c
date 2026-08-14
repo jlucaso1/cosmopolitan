@@ -31,7 +31,12 @@
  * speaking System V and nothing needs to be said.
  */
 
+#include "libc/calls/calls.h"
 #include "libc/dce.h"
+#include "libc/mem/mem.h"
+#include "libc/nt/thunk/msabi.h"
+#include "libc/stdio/stdio.h"
+#include "libc/str/str.h"
 
 #ifdef __x86_64__
 
@@ -50,5 +55,34 @@
 EXPORTED int cosmo_dll_add(int a, int b) {
   return a + b;
 }
+
+#if SupportsWindows()
+
+__msabi bool cosmo_dll_boot(void);
+
+/**
+ * Reports the process this is running in, formatted by cosmopolitan.
+ *
+ * Where the one above only has to be reachable, this has to work: it
+ * brings the runtime up inside the host and then asks it for a system
+ * call, some formatting and a little heap. Returns the pid, which the
+ * host compares against its own.
+ *
+ * Booting from here rather than from the library entry keeps us out from
+ * under the loader lock, which is also how node calls a native addon.
+ */
+EXPORTED int cosmo_dll_probe(char *out, int size) {
+  cosmo_dll_boot();
+  int pid = getpid();
+  char *scratch = malloc(128);
+  if (!scratch)
+    return -1;
+  snprintf(scratch, 128, "cosmo libc says pid=%d tid=%d", pid, gettid());
+  strlcpy(out, scratch, size);
+  free(scratch);
+  return pid;
+}
+
+#endif /* SupportsWindows() */
 
 #endif /* __x86_64__ */
