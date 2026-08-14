@@ -104,7 +104,15 @@ int main(void) {
     printf("FAIL: could not find cosmo_dll_init: %s\n", why());
     return 4;
   }
-  printf("ok: the runtime booted, returning %d\n", init());
+  int booted = init();
+  {
+    // a bare win32 call, before anything that might touch the registers
+    // the microsoft convention has the callee preserve
+    DWORD wrote;
+    WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), "back from the guest\n", 20,
+              &wrote, 0);
+  }
+  printf("ok: the runtime booted, returning %d\n", booted);
   printf("ok: the library still answers: %d\n", add(1, 2));
 
   int (*probe)(char *, int) = (int (*)(char *, int))sym(h, "cosmo_dll_probe");
