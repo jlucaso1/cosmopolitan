@@ -128,13 +128,12 @@ __msabi bool cosmo_dll_boot(void) {
   // why this goes before anything that allocates.
   for (init_f **f = __init_array_start; f < __init_array_end; ++f) {
     {
-      char buf[20] = "ctor ................";
+      char buf[22] = "ctor 0000000000000000\n";
       uintptr_t v = (uintptr_t)*f;
       for (int i = 0; i < 16; ++i)
-        buf[19 - i] = "0123456789abcdef"[(v >> (i * 4)) & 15];
+        buf[20 - i] = "0123456789abcdef"[(v >> (i * 4)) & 15];
       uint32_t wrote;
-      WriteFile(GetStdHandle(kNtStdErrorHandle), buf, 20, &wrote, 0);
-      WriteFile(GetStdHandle(kNtStdErrorHandle), "\n", 1, &wrote, 0);
+      WriteFile(GetStdHandle(kNtStdErrorHandle), buf, 22, &wrote, 0);
     }
     (*f)(1, cosmo_dll_argv, cosmo_dll_environ, 0);
   }
