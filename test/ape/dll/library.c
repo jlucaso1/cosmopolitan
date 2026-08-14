@@ -79,20 +79,22 @@ static void say(const char *what) {
   for (int i = 0; i < 8 && what[i]; ++i)
     buf[6 + i] = what[i];
   WriteFile(GetStdHandle(kNtStdErrorHandle), buf, 15, &wrote, 0);
+  asm volatile("" ::: "memory");
 }
 
 EXPORTED int cosmo_dll_probe(char *out, int size) {
-  cosmo_dll_boot();
   say("enter");
-  int pid = getpid();
+  cosmo_dll_boot();
+  say("booted");
+  volatile int pid = getpid();
   say("getpid");
   char *scratch = malloc(128);
   say("malloc");
   if (!scratch)
     return -1;
-  int tid = gettid();
+  volatile int tid = gettid();
   say("gettid");
-  snprintf(scratch, 128, "cosmo libc says pid=%d tid=%d", pid, tid);
+  snprintf(scratch, 128, "cosmo libc says pid=%d tid=%d", (int)pid, (int)tid);
   say("snprintf");
   strlcpy(out, scratch, size);
   say("strlcpy");
