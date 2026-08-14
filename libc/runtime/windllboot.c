@@ -121,15 +121,16 @@ __msabi bool cosmo_dll_boot(void) {
   // the linker never pulls it in and their .init fragments never run
   __enable_tls();
 
-  if (_weaken(__init_fds))
-    _weaken(__init_fds)();
-
-  // And now the constructors, which nothing else is going to run: a PE
-  // image has no equivalent of DT_INIT_ARRAY, and they assume a runtime
-  // that is already up, several of them making system calls. malloc is
-  // one of them, and until it runs the allocator is a null pointer.
+  // The constructors, which nothing else is going to run: a PE image has
+  // no equivalent of DT_INIT_ARRAY. They assume a runtime that is
+  // already up, several of them making system calls. malloc is one of
+  // them, and until it runs the allocator is a null pointer, which is
+  // why this goes before anything that allocates.
   for (init_f **f = __init_array_start; f < __init_array_end; ++f)
     (*f)(1, cosmo_dll_argv, cosmo_dll_environ, 0);
+
+  if (_weaken(__init_fds))
+    _weaken(__init_fds)();
 
   cosmo_dll_main_tib = __get_tls();
   return true;
