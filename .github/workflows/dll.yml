@@ -76,10 +76,11 @@ jobs:
 
   macos:
     needs: build
-    # intel, because the library ape emits today is x86-64. apple silicon
-    # needs the aarch64 path and a code signature, neither of which exists
-    # yet, so there is nothing to run there.
-    runs-on: macos-13
+    # The library ape emits today is x86-64, and the free runners are all
+    # apple silicon now, so the host is built for intel too and the pair
+    # runs under Rosetta. A native arm64 library needs the aarch64 path in
+    # ape.S and a code signature, neither of which exists yet.
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -87,5 +88,7 @@ jobs:
           name: shared-objects
       - name: load it
         run: |
-          clang -o host test/ape/dll/host.c
+          uname -m
+          clang -arch x86_64 -o host test/ape/dll/host.c
+          file host cosmo_dll_test.dylib
           ./host
