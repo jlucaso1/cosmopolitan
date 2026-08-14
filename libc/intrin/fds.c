@@ -79,7 +79,18 @@ static textwindows void SetupWinStd(struct Fds *fds, int i, uint32_t x) {
   atomic_store_explicit(&fds->f, i + 1, memory_order_relaxed);
 }
 
+static void fdtrace(int n, uintptr_t v) {
+  char buf[28] = "fds  .     0000000000000000\n";
+  buf[5] = '0' + n;
+  for (int i = 0; i < 16; ++i)
+    buf[26 - i] = "0123456789abcdef"[(v >> (i * 4)) & 15];
+  uint32_t wrote;
+  WriteFile(GetStdHandle(kNtStdErrorHandle), buf, 28, &wrote, 0);
+}
+
 textstartup void __init_fds(void) {
+  if (IsWindows())
+    fdtrace(0, 0);
 
   struct Fds *fds;
   fds = &__get_pib()->fds;
@@ -89,6 +100,8 @@ textstartup void __init_fds(void) {
                 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (fds->p == MAP_FAILED)
     _Exit(97);
+  if (IsWindows())
+    fdtrace(1, (uintptr_t)fds->p);
   fds->c = fds_map_size;
   fds->n = 3;
 
@@ -113,6 +126,8 @@ textstartup void __init_fds(void) {
       SetupWinStd(fds, i, kNtStdio[i]);
     }
   }
+  if (IsWindows())
+    fdtrace(2, 0);
   fds->p[0].flags = O_RDONLY;
   fds->p[1].flags = O_WRONLY;
   fds->p[2].flags = O_WRONLY;
@@ -120,7 +135,9 @@ textstartup void __init_fds(void) {
   // inherit file descriptors from cosmo parent process
   if (IsWindows()) {
     const char *fdspec;
+    fdtrace(3, (uintptr_t)environ);
     if ((fdspec = getenv("_COSMO_FDS_V2"))) {
+      fdtrace(4, (uintptr_t)fdspec);
       char *smaddr = 0;
       unsetenv("_COSMO_FDS");
       unsetenv("_COSMO_FDS_V2");
