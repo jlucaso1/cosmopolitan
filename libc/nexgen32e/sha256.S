@@ -104,6 +104,17 @@ y3	= %esi	# clobbers INP
 
 SRND	= CTX	# SRND is same register as CTX
 
+# Round constant access. Using the absolute address of kSha256x2 as a
+# displacement isn't possible in position independent code. Every gpr is
+# taken here, but %rbp is only pushed and popped, since the epilogue
+# restores %rsp from _RSP(%rsp), so it can hold the table base. That
+# costs the frame pointer chain within this function.
+#ifdef COSMO_DSO
+#define KTBL(off)	off(%rbp,SRND)
+#else
+#define KTBL(off)	kSha256x2+off(SRND)
+#endif
+
 a = %eax
 b = %ebx
 f = %r9d
@@ -536,7 +547,11 @@ sha256_transform_rorx:
 	beg
 	.ftrace2
 	push	%rbp
+#ifdef COSMO_DSO
+	lea	kSha256x2(%rip),%rbp	# see KTBL above
+#else
 	mov	%rsp,%rbp
+#endif
 	pushq	%rbx
 	pushq	%r12
 	pushq	%r13
@@ -601,19 +616,19 @@ sha256_transform_rorx:
 
 .balign 16
 .Loop1:
-	vpaddd	kSha256x2+0*32(SRND), X0, XFER
+	vpaddd	KTBL(0*32), X0, XFER
 	vmovdqa XFER, 0*32+_XFER(%rsp, SRND)
 	FOUR_ROUNDS_AND_SCHED	_XFER + 0*32
 
-	vpaddd	kSha256x2+1*32(SRND), X0, XFER
+	vpaddd	KTBL(1*32), X0, XFER
 	vmovdqa XFER, 1*32+_XFER(%rsp, SRND)
 	FOUR_ROUNDS_AND_SCHED	_XFER + 1*32
 
-	vpaddd	kSha256x2+2*32(SRND), X0, XFER
+	vpaddd	KTBL(2*32), X0, XFER
 	vmovdqa XFER, 2*32+_XFER(%rsp, SRND)
 	FOUR_ROUNDS_AND_SCHED	_XFER + 2*32
 
-	vpaddd	kSha256x2+3*32(SRND), X0, XFER
+	vpaddd	KTBL(3*32), X0, XFER
 	vmovdqa XFER, 3*32+_XFER(%rsp, SRND)
 	FOUR_ROUNDS_AND_SCHED	_XFER + 3*32
 
@@ -623,11 +638,11 @@ sha256_transform_rorx:
 
 .Loop2:
 	## Do last 16 rounds with no scheduling
-	vpaddd	kSha256x2+0*32(SRND), X0, XFER
+	vpaddd	KTBL(0*32), X0, XFER
 	vmovdqa XFER, 0*32+_XFER(%rsp, SRND)
 	DO_4ROUNDS	_XFER + 0*32
 
-	vpaddd	kSha256x2+1*32(SRND), X1, XFER
+	vpaddd	KTBL(1*32), X1, XFER
 	vmovdqa XFER, 1*32+_XFER(%rsp, SRND)
 	DO_4ROUNDS	_XFER + 1*32
 	add	$2*32, SRND

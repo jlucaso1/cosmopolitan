@@ -74,7 +74,7 @@ sys_sched_yield:
 	xor	%edx,%edx			// writefds
 	xor	%r10d,%r10d			// exceptfds
 	mov	%rsp,%r8			// timeout
-	mov	__NR_sched_yield,%eax		// ordinal
+	mov	__NR_sched_yield(%rip),%eax		// ordinal
 	clc					// linux
 	syscall
 //	It should not be possible for this to fail so we don't

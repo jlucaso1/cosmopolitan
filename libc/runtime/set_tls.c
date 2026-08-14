@@ -30,6 +30,9 @@
 
 int sys_set_tls(uintptr_t, void *);
 
+extern long __tls_disp;
+extern char __tls_guest;
+
 // we can't allow --ftrace here because cosmo_dlopen() calls this
 // function to fix the tls register, and ftrace needs it unbroken
 dontinstrument textstartup void __set_tls(struct CosmoTib *tib) {
@@ -37,7 +40,22 @@ dontinstrument textstartup void __set_tls(struct CosmoTib *tib) {
 #ifdef __x86_64__
   // ask the operating system to change the x86 segment register
   if (IsWindows()) {
+    // TlsAlloc() gives us a slot that can't collide with the host
     __set_tls_win32(tib);
+  } else if (__tls_guest) {
+    // we're hosted inside another runtime, so the segment register
+    // belongs to it; stash the tib in the slot the loader reserved
+    if (IsXnu()) {
+      __asm__ volatile("mov\t%0,%%gs:(%1)"
+                       : /* no outputs */
+                       : "r"(tib), "r"(__tls_disp)
+                       : "memory");
+    } else {
+      __asm__ volatile("mov\t%0,%%fs:(%1)"
+                       : /* no outputs */
+                       : "r"(tib), "r"(__tls_disp)
+                       : "memory");
+    }
   } else if (IsLinux()) {
     sys_set_tls(ARCH_SET_FS, tib);
   } else if (IsFreebsd()) {

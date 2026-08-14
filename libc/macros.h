@@ -497,8 +497,7 @@
 //	Supporting security blankets
 .macro	ezlea	symbol:req reg:req
 #if	__pic__ + __pie__ + __code_model_medium__ + __code_model_large__ + 0 > 1
-//	lea	\symbol(%rip),%r\reg
-	mov	$\symbol,%e\reg
+	lea	\symbol(%rip),%r\reg
 #else
 	mov	$\symbol,%e\reg
 #endif

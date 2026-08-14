@@ -25,7 +25,7 @@ cosmo_futex_thunk:
 	pro
 #ifdef __x86_64__
 	mov	%rcx,%r10
-	mov	__NR_futex,%eax
+	mov	__NR_futex(%rip),%eax
 	clc
 	syscall
 	jnc	1f

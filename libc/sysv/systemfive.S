@@ -107,7 +107,7 @@ systemfive_cp:
 systemfive_cancellable:			// our pthread_cancel() miracle code
 	cmpb	$0,__tls_enabled(%rip)	// inspired by the musl libc design!
 	je	1f			// we handle linux and bsd together!
-#if SupportsXnu() || SupportsWindows()
+#if SupportsXnu() || SupportsWindows() || defined(COSMO_DSO)
 	call	__get_tls_r10		// CosmoTib::tib_self
 #else
 	mov	%fs:0x30,%r10		// CosmoTib::tib_self
@@ -137,7 +137,7 @@ systemfive_cancellable_end:		// i/o calls park here for long time
 	jne	systemfive_errno	// werent interrupted by OnSigCancel
 	cmpb	$0,__tls_enabled(%rip)	// make sure it's safe to grab %fs:0
 	je	systemfive_errno	// tls is disabled we can't continue
-#if SupportsXnu() || SupportsWindows()
+#if SupportsXnu() || SupportsWindows() || defined(COSMO_DSO)
 	call	__get_tls_rcx		// CosmoTib::tib_self
 #else
 	mov	%fs:0x30,%rcx		// CosmoTib::tib_self
@@ -298,9 +298,9 @@ systemfive_xnu:
 _init_systemfive_detected:
 	mov	%eax,__hostos(%rip)
 	bsr	%eax,%eax
-	mov	$_init_systemfive_jmptab,%ebx
+	ezlea	_init_systemfive_jmptab,bx
 	movzbl	(%rbx,%rax),%eax
-	lea	(%rbx,%rax),%eax
+	lea	(%rbx,%rax),%rax
 	jmp	*%rax
 _init_systemfive_jmptab:
 	.byte	_init_systemfive_linux-_init_systemfive_jmptab
@@ -314,62 +314,64 @@ _init_systemfive_jmptab:
 _init_systemfive_linux:
 #if SupportsLinux()
 	pushb	systemfive_linux-.Lanchorpoint
-	mov	$syscon_linux,%esi
+	ezlea	syscon_linux,si
 	jmp	_init_systemfive_os
 #endif
 	.endfn	_init_systemfive_linux
 _init_systemfive_metal:
 #if SupportsMetal()
 	pushb	systemfive_enosys-.Lanchorpoint
-	mov	$syscon_linux,%esi
+	ezlea	syscon_linux,si
 	jmp	_init_systemfive_os
 #endif
 	.endfn	_init_systemfive_metal
 _init_systemfive_windows:
 #if SupportsWindows()
 	pushb	systemfive_enosys-.Lanchorpoint
-	mov	$syscon_windows,%esi
+	ezlea	syscon_windows,si
 	jmp	_init_systemfive_os
 #endif
 	.endfn	_init_systemfive_windows
 _init_systemfive_xnu:
 #if SupportsXnu()
 	pushb	systemfive_xnu-.Lanchorpoint
-	mov	$syscon_xnu,%esi
+	ezlea	syscon_xnu,si
 	jmp	_init_systemfive_os
 #endif
 	.endfn	_init_systemfive_xnu
 _init_systemfive_openbsd:
 #if SupportsOpenbsd()
 	pushb	systemfive_openbsd-.Lanchorpoint
-	mov	$syscon_openbsd,%esi
+	ezlea	syscon_openbsd,si
 	jmp	_init_systemfive_os
 #endif
 	.endfn	_init_systemfive_openbsd
 _init_systemfive_freebsd:
 #if SupportsFreebsd()
 	pushb	systemfive_freebsd-.Lanchorpoint
-	mov	$syscon_freebsd,%esi
+	ezlea	syscon_freebsd,si
 	jmp	_init_systemfive_os
 #endif
 	.endfn	_init_systemfive_freebsd
 _init_systemfive_netbsd:
 #if SupportsNetbsd()
 	pushb	systemfive_netbsd-.Lanchorpoint
-	mov	$syscon_netbsd,%esi
+	ezlea	syscon_netbsd,si
 //	𝑠𝑙𝑖𝑑𝑒
 #endif
 	.endfn	_init_systemfive_netbsd
 _init_systemfive_os:
 	pop	%rax
-	add	$.Lanchorpoint,%eax
+	ezlea	.Lanchorpoint,dx
+	add	%rdx,%rax
 	stosq	#→ __systemfive
 //	𝑠𝑙𝑖𝑑𝑒
 	.endfn	_init_systemfive_os
 _init_systemfive_magnums:
 	push	%rdi
-	mov	$syscon_start,%edi
-2:	cmp	$syscon_end,%edi
+	ezlea	syscon_start,di
+2:	ezlea	syscon_end,bx
+	cmp	%rbx,%rdi
 	jnb	5f
 	xor	%ebx,%ebx
 	xor	%ecx,%ecx

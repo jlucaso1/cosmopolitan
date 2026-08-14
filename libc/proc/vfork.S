@@ -74,7 +74,11 @@ vfork:
 #endif
 	pop	%rbp
 #endif
+#ifdef COSMO_DSO
+	call	__get_tls_r9		// get thread information block
+#else
 	mov	%fs:0x30,%r9		// get thread information block
+#endif
 	mov	0x3c(%r9),%r8d		// avoid question of @vforksafe errno
 	pop	%rsi			// saves return address in a register
 	mov	__NR_vfork(%rip),%eax

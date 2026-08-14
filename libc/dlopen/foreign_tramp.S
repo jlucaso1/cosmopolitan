@@ -56,7 +56,7 @@ foreign_tramp:
 	mov	%rax,-0xc0(%rbp)
 
 //	switch to foreign tls
-#if SupportsXnu() || SupportsWindows()
+#if SupportsXnu() || SupportsWindows() || defined(COSMO_DSO)
 	call	__get_tls_rax
 #else
 	mov	%fs:0x30,%rax

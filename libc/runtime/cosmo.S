@@ -79,8 +79,9 @@ cosmo:	beg
 //	call constructors
 	.weak	__init_array_end
 	.weak	__init_array_start
-	mov	$__init_array_start,%eax
-1:	cmp	$__init_array_end,%eax
+	ezlea	__init_array_start,ax
+1:	ezlea	__init_array_end,bx
+	cmp	%rbx,%rax
 	je	2f
 	push	%rax
 	push	%rax
@@ -91,7 +92,7 @@ cosmo:	beg
 	call	*(%rax)
 	pop	%rax
 	pop	%rax
-	add	$8,%eax
+	add	$8,%rax
 	jmp	1b
 
 //	call main()

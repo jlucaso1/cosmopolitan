@@ -37,7 +37,7 @@ __gc:	beg
 
 #ifdef __x86_64__
 
-#if SupportsXnu() || SupportsWindows()
+#if SupportsXnu() || SupportsWindows() || defined(COSMO_DSO)
 	call	__get_tls_rcx
 #else
 	mov	%fs:0x30,%rcx
