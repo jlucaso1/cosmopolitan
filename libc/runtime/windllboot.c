@@ -47,9 +47,11 @@ extern char cosmo_dll_hostos asm("__hostos");
 
 void _init(void);
 
+// weak, like cosmo2.c declares them: they come from the linker script,
+// so no package defines them
 typedef int init_f(int, char **, char **, unsigned long *);
-extern init_f *__init_array_start[];
-extern init_f *__init_array_end[];
+extern init_f *__init_array_start[] __attribute__((__weak__));
+extern init_f *__init_array_end[] __attribute__((__weak__));
 
 static bool cosmo_dll_booted;
 static char *cosmo_dll_argv[2];
@@ -117,7 +119,7 @@ __msabi bool cosmo_dll_boot(void) {
   // image has no equivalent of DT_INIT_ARRAY, and they assume a runtime
   // that is already up, several of them making system calls. malloc is
   // one of them, and until it runs the allocator is a null pointer.
-  for (init_f **f = __init_array_start; f != __init_array_end; ++f)
+  for (init_f **f = __init_array_start; f < __init_array_end; ++f)
     (*f)(1, cosmo_dll_argv, cosmo_dll_environ, 0);
   if (_weaken(__init_fds))
     _weaken(__init_fds)();
