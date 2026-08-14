@@ -126,8 +126,18 @@ __msabi bool cosmo_dll_boot(void) {
   // already up, several of them making system calls. malloc is one of
   // them, and until it runs the allocator is a null pointer, which is
   // why this goes before anything that allocates.
-  for (init_f **f = __init_array_start; f < __init_array_end; ++f)
+  for (init_f **f = __init_array_start; f < __init_array_end; ++f) {
+    {
+      char buf[20] = "ctor ................";
+      uintptr_t v = (uintptr_t)*f;
+      for (int i = 0; i < 16; ++i)
+        buf[19 - i] = "0123456789abcdef"[(v >> (i * 4)) & 15];
+      uint32_t wrote;
+      WriteFile(GetStdHandle(kNtStdErrorHandle), buf, 20, &wrote, 0);
+      WriteFile(GetStdHandle(kNtStdErrorHandle), "\n", 1, &wrote, 0);
+    }
     (*f)(1, cosmo_dll_argv, cosmo_dll_environ, 0);
+  }
 
   if (_weaken(__init_fds))
     _weaken(__init_fds)();
