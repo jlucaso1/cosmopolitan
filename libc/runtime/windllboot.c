@@ -27,12 +27,7 @@
 #include "libc/runtime/internal.h"
 #include "libc/runtime/runtime.h"
 #include "libc/sysv/pib.h"
-#include "libc/calls/syscall-sysv.internal.h"
-#include "libc/mem/mem.h"
-#include "libc/nt/files.h"
-#include "libc/nt/thread.h"
 #include "libc/thread/tls.h"
-#include "third_party/dlmalloc/dlmalloc.h"
 
 /**
  * @fileoverview Bringing up the runtime inside somebody else's process.
@@ -58,18 +53,8 @@ typedef int init_f(int, char **, char **, unsigned long *);
 extern init_f *__init_array_start[] __attribute__((__weak__));
 extern init_f *__init_array_end[] __attribute__((__weak__));
 
-static void trace(const char *tag, uintptr_t v) {
-  char buf[32] = "boot ....  0000000000000000\n";
-  for (int i = 0; i < 4 && tag[i]; ++i)
-    buf[5 + i] = tag[i];
-  for (int i = 0; i < 16; ++i)
-    buf[25 - i] = "0123456789abcdef"[(v >> (i * 4)) & 15];
-  uint32_t wrote;
-  WriteFile(GetStdHandle(kNtStdErrorHandle), buf, 28, &wrote, 0);
-}
-
 static bool cosmo_dll_booted;
-static struct CosmoTib *cosmo_dll_main_tib;
+struct CosmoTib *__cosmo_dll_main_tib;
 static char *cosmo_dll_argv[2];
 static char *cosmo_dll_environ[1];
 
@@ -122,7 +107,6 @@ __msabi bool cosmo_dll_boot(void) {
   // the compiler is holding the caller's rsi, rdi and xmm6 through xmm15
   // for it, and anything it isn't told about goes back to the host in
   // whatever state the libc left it.
-  trace("pre", (uintptr_t)pib);
   // WinInit() and the elf startup both record where the stack was before
   // the runtime came up, and the memory manager reads it
   __oldstack = (intptr_t)__builtin_frame_address(0);
@@ -145,14 +129,12 @@ __msabi bool cosmo_dll_boot(void) {
   // an argument count with nothing under it. Which is worse than finding
   // nothing at all: program_invocation_short_name_init() checks __argc
   // and then walks __argv.
-  trace("init", 0);
   __argc = 1;
   __argv = cosmo_dll_argv;
   __envp = environ;
 
   // these two live in cosmo.S, which nothing references in a library, so
   // the linker never pulls it in and their .init fragments never run
-  trace("tls", 0);
   __enable_tls();
 
   // The constructors, which nothing else is going to run: a PE image has
@@ -161,89 +143,14 @@ __msabi bool cosmo_dll_boot(void) {
   // them, and until it runs the allocator is a null pointer, which is
   // why this goes before anything that allocates.
   for (init_f **f = __init_array_start; f < __init_array_end; ++f) {
-    trace("ctor", (uintptr_t)*f);
     (*f)(1, cosmo_dll_argv, cosmo_dll_environ, 0);
   }
 
-  trace("fds", 0);
   if (_weaken(__init_fds))
     _weaken(__init_fds)();
-  trace("done", 0);
 
   // the plain __get_tls() is a bare %fs read, which is what tlscc exists
   // to rewrite; this file is windows only, so it says so itself
-  cosmo_dll_main_tib = __get_tls_win32();
+  __cosmo_dll_main_tib = __get_tls_win32();
   return true;
-}
-
-/**
- * Adopts a thread the host created.
- *
- * Only the thread that called cosmo_dll_boot() has a tib. Any other one
- * arrives with an empty slot, and the first thing to want thread local
- * storage, which is to say malloc or errno or stdio, reads a null
- * pointer. Cosmopolitan does this itself for the threads it creates,
- * where pthread_create() builds the tib and the clone installs it.
- *
- * A host calling in from a pool of its own has to do this on each of
- * those threads, and cosmo_dll_thread_fini() before letting one go.
- * Safe to call more than once on the same thread.
- */
-__msabi int cosmo_dll_thread_init(void) {
-  if (!cosmo_dll_main_tib)
-    return -1;
-  if (__get_tls_win32())
-    return 0;  // already adopted
-
-  // the thread machinery lives in a package this one doesn't depend on,
-  // so a library that never pulled it in can't adopt anything
-  if (!_weaken(_mktls) || !_weaken(__set_tls))
-    return -1;
-
-  // _mktls() copies ftrace, strace and the signal mask off the current
-  // tib, so it needs a valid one installed; lend it the main thread's
-  _weaken(__set_tls)(cosmo_dll_main_tib);
-  struct CosmoTib *tib;
-  char *tls = _weaken(_mktls)(&tib);
-  if (!tls) {
-    _weaken(__set_tls)(0);
-    return -1;
-  }
-  if (_weaken(tmspace_acquire))
-    tib->tib_malloc = _weaken(tmspace_acquire)();
-
-  // what __enable_tls() gives the main thread, and what anything that
-  // suspends or signals a thread goes through
-  intptr_t hand;
-  DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(),
-                  &hand, 0, false, kNtDuplicateSameAccess);
-  atomic_init(&tib->tib_syshand, hand);
-
-  tib->tib_keys_dynamic = (void *)tls;  // so the teardown can free it
-
-  // not gettid(), which answers out of the tib, and the tib installed
-  // just now is still the main thread's
-  int tid = sys_gettid();
-  atomic_init(&tib->tib_ptid, tid);
-  atomic_init(&tib->tib_ctid, tid);
-  _weaken(__set_tls)(tib);
-  return 0;
-}
-
-/**
- * Hands back what cosmo_dll_thread_init() took.
- */
-__msabi void cosmo_dll_thread_fini(void) {
-  struct CosmoTib *tib = __get_tls_win32();
-  if (!tib || tib == cosmo_dll_main_tib || !_weaken(__set_tls))
-    return;
-  void *tls = tib->tib_keys_dynamic;
-  intptr_t hand = atomic_load_explicit(&tib->tib_syshand, memory_order_relaxed);
-  if (_weaken(tmspace_release))
-    _weaken(tmspace_release)(tib->tib_malloc);
-  _weaken(__set_tls)(0);
-  if (hand)
-    CloseHandle(hand);
-  if (_weaken(free))
-    _weaken(free)(tls);
 }

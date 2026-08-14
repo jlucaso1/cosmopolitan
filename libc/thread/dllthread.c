@@ -1,0 +1,103 @@
+/*-*- mode:c;indent-tabs-mode:nil;c-basic-offset:2;tab-width:8;coding:utf-8 -*-│
+│ vi: set et ft=c ts=2 sts=2 sw=2 fenc=utf-8                               :vi │
+╞══════════════════════════════════════════════════════════════════════════════╡
+│ Copyright 2026 Justine Alexandra Roberts Tunney                              │
+│                                                                              │
+│ Permission to use, copy, modify, and/or distribute this software for         │
+│ any purpose with or without fee is hereby granted, provided that the         │
+│ above copyright notice and this permission notice appear in all copies.      │
+│                                                                              │
+│ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL                │
+│ WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED                │
+│ WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE             │
+│ AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL         │
+│ DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR        │
+│ PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER               │
+│ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
+│ PERFORMANCE OF THIS SOFTWARE.                                                │
+╚─────────────────────────────────────────────────────────────────────────────*/
+#include "libc/atomic.h"
+#include "libc/calls/syscall-sysv.internal.h"
+#include "libc/intrin/atomic.h"
+#include "libc/mem/mem.h"
+#include "libc/nt/files.h"
+#include "libc/nt/runtime.h"
+#include "libc/nt/thread.h"
+#include "libc/thread/tls.h"
+#include "third_party/dlmalloc/dlmalloc.h"
+
+/**
+ * @fileoverview Lending the runtime to threads a windows host made.
+ *
+ * This is the other half of libc/runtime/windllboot.c, and it lives here
+ * rather than there because building a thread information block is the
+ * thread library's business, and libc/runtime doesn't depend on it. A
+ * weak reference wouldn't do: nothing else in a library pulls the thread
+ * machinery in, so there would be nothing to point at.
+ */
+
+extern struct CosmoTib *__cosmo_dll_main_tib;
+
+/**
+ * Adopts a thread the host created.
+ *
+ * Only the thread that called cosmo_dll_boot() has a tib. Any other one
+ * arrives with an empty slot, and the first thing to want thread local
+ * storage, which is to say malloc or errno or stdio, reads a null
+ * pointer. Cosmopolitan does this itself for the threads it creates,
+ * where pthread_create() builds the tib and the clone installs it.
+ *
+ * A host calling in from a pool of its own has to do this on each of
+ * those threads, and cosmo_dll_thread_fini() before letting one go.
+ * Safe to call more than once on the same thread.
+ */
+__msabi int cosmo_dll_thread_init(void) {
+  if (!__cosmo_dll_main_tib)
+    return -1;
+  if (__get_tls_win32())
+    return 0;  // already adopted
+
+  // _mktls() copies ftrace, strace and the signal mask off the current
+  // tib, so it needs a valid one installed; lend it the main thread's
+  __set_tls(__cosmo_dll_main_tib);
+  struct CosmoTib *tib;
+  char *tls = _mktls(&tib);
+  if (!tls) {
+    __set_tls(0);
+    return -1;
+  }
+  tib->tib_malloc = tmspace_acquire();
+
+  // what __enable_tls() gives the main thread, and what anything that
+  // suspends or signals a thread goes through
+  intptr_t hand;
+  DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(),
+                  &hand, 0, false, kNtDuplicateSameAccess);
+  atomic_init(&tib->tib_syshand, hand);
+
+  tib->tib_keys_dynamic = (void *)tls;  // so the teardown can free it
+
+  // not gettid(), which answers out of the tib, and the tib installed
+  // just now is still the main thread's
+  int tid = sys_gettid();
+  atomic_init(&tib->tib_ptid, tid);
+  atomic_init(&tib->tib_ctid, tid);
+  __set_tls(tib);
+  return 0;
+}
+
+/**
+ * Hands back what cosmo_dll_thread_init() took.
+ */
+__msabi void cosmo_dll_thread_fini(void) {
+  struct CosmoTib *tib = __get_tls_win32();
+  if (!tib || tib == __cosmo_dll_main_tib)
+    return;
+  void *tls = tib->tib_keys_dynamic;
+  intptr_t hand = atomic_load_explicit(&tib->tib_syshand, memory_order_relaxed);
+  tmspace_release(tib->tib_malloc);
+  __set_tls(0);
+  if (hand)
+    CloseHandle(hand);
+  free(tls);
+}

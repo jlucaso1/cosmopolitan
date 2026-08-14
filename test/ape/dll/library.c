@@ -34,8 +34,6 @@
 #include "libc/calls/calls.h"
 #include "libc/dce.h"
 #include "libc/mem/mem.h"
-#include "libc/nt/files.h"
-#include "libc/nt/runtime.h"
 #include "libc/nt/thunk/msabi.h"
 #include "libc/stdio/stdio.h"
 #include "libc/str/str.h"
@@ -73,42 +71,24 @@ __msabi bool cosmo_dll_boot(void);
  * Booting from here rather than from the library entry keeps us out from
  * under the loader lock, which is also how node calls a native addon.
  */
-static void say(const char *what) {
-  uint32_t wrote;
-  char buf[16] = "probe ........\n";
-  for (int i = 0; i < 8 && what[i]; ++i)
-    buf[6 + i] = what[i];
-  WriteFile(GetStdHandle(kNtStdErrorHandle), buf, 15, &wrote, 0);
-  asm volatile("" ::: "memory");
-}
-
 /**
  * Brings the runtime up and returns, touching nothing else.
  */
 EXPORTED int cosmo_dll_init(void) {
   int ok = cosmo_dll_boot() ? 1 : 0;
-  say("returned");
   return ok;
 }
 
 EXPORTED int cosmo_dll_probe(char *out, int size) {
-  say("enter");
   cosmo_dll_boot();
-  say("booted");
-  volatile int pid = getpid();
-  say("getpid");
+  int pid = getpid();
   char *scratch = malloc(128);
-  say("malloc");
   if (!scratch)
     return -1;
-  volatile int tid = gettid();
-  say("gettid");
-  snprintf(scratch, 128, "cosmo libc says pid=%d tid=%d", (int)pid, (int)tid);
-  say("snprintf");
+  int tid = gettid();
+  snprintf(scratch, 128, "cosmo libc says pid=%d tid=%d", pid, tid);
   strlcpy(out, scratch, size);
-  say("strlcpy");
   free(scratch);
-  say("free");
   return pid;
 }
 
