@@ -36,6 +36,38 @@ static const char *why(void) {
 }
 #endif
 
+#ifdef _WIN32
+static int (*guest_thread_init)(void);
+static void (*guest_thread_fini)(void);
+static int (*guest_probe)(char *, int);
+static int thread_failed;
+
+// a thread the host made, which enters the guest with an empty tib slot
+static DWORD WINAPI thread_main(LPVOID arg) {
+  char buf[128] = "";
+  if (guest_thread_init() != 0) {
+    printf("FAIL: could not adopt a host thread\n");
+    thread_failed = 1;
+    return 0;
+  }
+  int pid = guest_probe(buf, sizeof(buf));
+  if (pid != (int)GetCurrentProcessId()) {
+    printf("FAIL: guest getpid said %d on a host thread\n", pid);
+    thread_failed = 1;
+  }
+  char mine[32];
+  snprintf(mine, sizeof(mine), "tid=%d", (int)GetCurrentThreadId());
+  if (!strstr(buf, mine)) {
+    printf("FAIL: guest said \"%s\", this thread is %s\n", buf, mine);
+    thread_failed = 1;
+  }
+  guest_thread_fini();
+  if (!thread_failed)
+    printf("ok: a host thread reached the guest: %s\n", buf);
+  return 0;
+}
+#endif
+
 int main(void) {
   // unbuffered, so a crash in the loader still leaves a trail
   setvbuf(stdout, 0, _IONBF, 0);
@@ -84,6 +116,21 @@ int main(void) {
     return 6;
   }
   printf("ok: the guest runtime is up: %s\n", buf);
+
+  // node calls a native addon from its own threads, so a hosted runtime
+  // that only works on the one that loaded it is of little use
+  guest_probe = probe;
+  guest_thread_init = (int (*)(void))sym(h, "cosmo_dll_thread_init");
+  guest_thread_fini = (void (*)(void))sym(h, "cosmo_dll_thread_fini");
+  if (!guest_thread_init || !guest_thread_fini) {
+    printf("FAIL: could not find the thread entry points: %s\n", why());
+    return 7;
+  }
+  HANDLE t = CreateThread(0, 0, thread_main, 0, 0, 0);
+  WaitForSingleObject(t, INFINITE);
+  CloseHandle(t);
+  if (thread_failed)
+    return 8;
 #endif
 
   return 0;
