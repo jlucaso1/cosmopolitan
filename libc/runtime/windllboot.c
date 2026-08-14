@@ -170,7 +170,9 @@ __msabi bool cosmo_dll_boot(void) {
     _weaken(__init_fds)();
   trace("done", 0);
 
-  cosmo_dll_main_tib = __get_tls();
+  // the plain __get_tls() is a bare %fs read, which is what tlscc exists
+  // to rewrite; this file is windows only, so it says so itself
+  cosmo_dll_main_tib = __get_tls_win32();
   return true;
 }
 
@@ -190,7 +192,7 @@ __msabi bool cosmo_dll_boot(void) {
 __msabi int cosmo_dll_thread_init(void) {
   if (!cosmo_dll_main_tib)
     return -1;
-  if (__get_tls())
+  if (__get_tls_win32())
     return 0;  // already adopted
 
   // the thread machinery lives in a package this one doesn't depend on,
@@ -232,7 +234,7 @@ __msabi int cosmo_dll_thread_init(void) {
  * Hands back what cosmo_dll_thread_init() took.
  */
 __msabi void cosmo_dll_thread_fini(void) {
-  struct CosmoTib *tib = __get_tls();
+  struct CosmoTib *tib = __get_tls_win32();
   if (!tib || tib == cosmo_dll_main_tib || !_weaken(__set_tls))
     return;
   void *tls = tib->tib_keys_dynamic;
