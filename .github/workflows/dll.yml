@@ -89,6 +89,12 @@ jobs:
       - name: load it
         run: |
           uname -m
+          file cosmo_dll_test.dylib
+          # what does the platform's own tooling make of it
+          otool -l cosmo_dll_test.dylib | head -60 || true
+          echo "--- exports as dyld sees them ---"
+          dyld_info -exports cosmo_dll_test.dylib || true
+          nm -gU cosmo_dll_test.dylib || true
+          echo "--- now try to use it ---"
           clang -arch x86_64 -o host test/ape/dll/host.c
-          file host cosmo_dll_test.dylib
           ./host
