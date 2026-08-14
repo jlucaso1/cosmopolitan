@@ -1008,6 +1008,11 @@ ape_macho:
 //	   d│││││││dr│Ddd││
 PEEXE = 0b00000001000100011
 
+//	Same, plus bit 13, which is what makes The New Technology treat an
+//	image as a library rather than a program. Relocs stay stripped, so
+//	it has to land on ImageBase; nothing here is position independent.
+PEDLL = PEEXE | 0b0010000000000000
+
 //	   ┌15:TERMINAL_SERVER_AWARE            ┌─────────────────────────┐
 //	   │┌14:GUARD_CF                        │ PE DLL Characteristics  │
 //	   ││┌13:WDM_DRIVER                     ├─────────────────────────┤
@@ -1051,7 +1056,11 @@ ape_pe:	.ascin	"PE",4
 	.long	0			// PointerToSymbolTable
 	.long	0			// NumberOfSymbols
 	.short	ape_pe_optsz		// SizeOfOptionalHeader
+#ifdef APE_DLL
+	.short	PEDLL			// Characteristics
+#else
 	.short	PEEXE			// Characteristics
+#endif
 	.short	kNtPe64bit		// Optional Header Magic
 	.byte	14			// MajorLinkerVersion
 	.byte	15			// MinorLinkerVersion
@@ -1081,11 +1090,96 @@ ape_pe:	.ascin	"PE",4
 	.quad	0			// HeapCommit
 	.long	0			// LoaderFlags
 	.long	2			// NumberOfDirectoryEntries
-	.long	0,0			// ExportsDirectory
+	.long	ape_pe_edatarva		// ExportsDirectory
+	.long	ape_pe_edatasize	// ExportsDirectorySize
 	.long	ape_idata		// ImportsDirectory
 	.long	ape_idata_idtsize	// ImportsDirectorySize
 	.endobj	ape_pe,globl
 	.previous
+
+#ifdef APE_DLL
+//	Library entry point.
+//
+//	The New Technology calls this with the reason in %edx under the
+//	Microsoft convention, and a library that refuses to load returns
+//	zero. Returning one here means the runtime is not up yet: the
+//	host is expected to call into us for that, the way a .node addon
+//	does from napi_register_module_v1.
+	.text
+ape_dll_main:
+	mov	$1,%eax
+	ret
+	.endfn	ape_dll_main,globl
+
+//	Export directory.
+//
+//	Lives in .rdata rather than a section of its own: the data
+//	directory only needs an RVA into something mapped, and .rdata
+//	already is, so this costs no extra PE section header.
+//
+//	The three parallel arrays are decentralized, one fragment per
+//	exported symbol, so the linker sorts them by name together. The
+//	loader binary searches AddressOfNames, which is why the sort has
+//	to be on the name and the ordinal array has to follow it.
+//
+//	@see	.export in libc/macros.h
+	.section .sort.rodata.pe.edata.1,"a",@progbits
+	.balign	16
+ape_pe_edata:
+	.long	0			// ExportFlags
+	.long	0			// TimeDateStamp
+	.short	0			// MajorVersion
+	.short	0			// MinorVersion
+	.long	RVA(ape_pe_edata_dllname)
+	.long	1			// OrdinalBase
+	.long	ape_pe_edata_count	// NumberOfFunctions
+	.long	ape_pe_edata_count	// NumberOfNames
+	.long	RVA(ape_pe_edata_funcs)
+	.long	RVA(ape_pe_edata_names)
+	.long	RVA(ape_pe_edata_ords)
+	.endobj	ape_pe_edata,globl
+	.previous
+
+//	Each array is bracketed by a start and an end fragment. Section
+//	names sort lexicographically, so ".2.0" opens each array, the per
+//	symbol fragments land in ".2.1.<name>", and ".2.2" closes it.
+	.section .sort.rodata.pe.edata.2.0,"a",@progbits
+ape_pe_edata_funcs:
+	.endobj	ape_pe_edata_funcs,globl
+	.previous
+	.section .sort.rodata.pe.edata.2.2,"a",@progbits
+ape_pe_edata_funcs_end:
+	.endobj	ape_pe_edata_funcs_end,globl
+	.previous
+
+	.section .sort.rodata.pe.edata.3.0,"a",@progbits
+ape_pe_edata_names:
+	.endobj	ape_pe_edata_names,globl
+	.previous
+	.section .sort.rodata.pe.edata.3.2,"a",@progbits
+ape_pe_edata_names_end:
+	.endobj	ape_pe_edata_names_end,globl
+	.previous
+
+	.section .sort.rodata.pe.edata.4.0,"a",@progbits
+ape_pe_edata_ords:
+	.endobj	ape_pe_edata_ords,globl
+	.previous
+	.section .sort.rodata.pe.edata.4.2,"a",@progbits
+ape_pe_edata_ords_end:
+	.endobj	ape_pe_edata_ords_end,globl
+	.previous
+
+	.section .sort.rodata.pe.edata.5.0,"a",@progbits
+ape_pe_edata_dllname:
+	.asciz	"cosmo"
+	.endobj	ape_pe_edata_dllname
+	.previous
+	.section .sort.rodata.pe.edata.6.2,"a",@progbits
+ape_pe_edata_end:
+	.endobj	ape_pe_edata_end,globl
+	.previous
+#endif /* APE_DLL */
 
 	.section .pe.sections,"a",@progbits
 	.ascin	".text",8		// Section Name

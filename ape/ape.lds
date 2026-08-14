@@ -208,7 +208,14 @@
 #error "please use 32-bit addresses for image data"
 #endif
 
+#ifdef APE_DLL
+/*	A library has no program entry. The elf side of the image is dead
+	weight here -- only the PE headers get used -- but the script still
+	wants something to point at. */
+ENTRY(ape_dll_main)
+#else
 ENTRY(_start)
+#endif
 
 PHDRS {
   Head PT_LOAD FLAGS(PF_X|PF_R);
@@ -569,7 +576,11 @@ ape_pe_sectionalignment = 4096;
 ape_pe_sizeofheaders = SIZEOF(.head);
 ape_pe_sizeofimage = ROUNDUP(_end - __executable_start, ape_pe_sectionalignment);
 
+#ifdef APE_DLL
+PFSTUB8(ape_elf_entry, ape_dll_main);
+#else
 PFSTUB8(ape_elf_entry, _start);
+#endif
 PFSTUB8(ape_elf_phoff, RVA(ape_phdrs));
 PFSTUB8(ape_elf_shoff, 0);
 PFSTUB4(ape_elf_phnum, (ape_phdrs_end - ape_phdrs) / 56);
@@ -720,7 +731,11 @@ CHURN(ape_text_paddr);
 CHURN(ape_text_rva);
 CHURN(ape_text_vaddr);
 CHURN(ADDR(.bss));
+#ifdef APE_DLL
+CHURN(ape_dll_main);
+#else
 CHURN(_start);
+#endif
 CHURN(ape_phdrs);
 #if SupportsMetal()
 CHURN(v_ape_allsectors);
@@ -739,7 +754,11 @@ CHURN(ape_pe_shnum);
 CHURN(ape_phdrs_end);
 #endif /* SupportsWindows() */
 #if SupportsWindows()
+#ifdef APE_DLL
+CHURN(ape_dll_main);
+#else
 CHURN(WinMain);
+#endif
 #endif
 #endif /* SupportsXnu() */
 
@@ -754,6 +773,24 @@ ape_idataz = LINK_WINDOWS ? RVA(ape_idata_iat) : 0;
 ape_idata_iatsize = LINK_WINDOWS ? ape_idata_iatend - ape_idata_iat : 0;
 ape_idata = LINK_WINDOWS ? RVA(ape_idata_idt) : 0;
 ape_idata_idtsize = LINK_WINDOWS ? ape_idata_idtend - ape_idata_idt : 0;
+#ifdef APE_DLL
+/*	The export directory rides inside .rdata, so it needs no PE section
+	header of its own; the data directory only wants an rva into
+	something mapped. Both arrays are bracketed by end markers the
+	sorted fragments can't reach past. */
+ape_pe_edatarva = RVA(ape_pe_edata);
+ape_pe_edatasize = ape_pe_edata_end - ape_pe_edata;
+ape_pe_edata_count = (ape_pe_edata_funcs_end - ape_pe_edata_funcs) / 4;
+ASSERT(ape_pe_edata_names_end - ape_pe_edata_names ==
+       ape_pe_edata_funcs_end - ape_pe_edata_funcs,
+       "PE export name and function arrays must be parallel");
+ASSERT((ape_pe_edata_ords_end - ape_pe_edata_ords) * 2 ==
+       ape_pe_edata_funcs_end - ape_pe_edata_funcs,
+       "PE export ordinal array must have one short per function");
+#else
+ape_pe_edatarva = 0;
+ape_pe_edatasize = 0;
+#endif
 v_ntdllchar = LINK_WINDOWS ? 288 : 0;
 v_ntsubversion = LINK_WINDOWS ? 6 : 5;
 v_ntsubsystem = (LINK_WINDOWS
@@ -761,7 +798,11 @@ v_ntsubsystem = (LINK_WINDOWS
                     ? kNtImageSubsystemWindowsGui
                     : kNtImageSubsystemWindowsCui)
                  : kNtImageSubsystemEfiApplication);
+#ifdef APE_DLL
+ape_pe_entry = ape_dll_main;
+#else
 ape_pe_entry = LINK_WINDOWS ? WinMain : EfiMain;
+#endif
 #endif
 
 #if SupportsXnu()
@@ -788,7 +829,9 @@ ASSERT(ape_stack_vaddr % ape_stack_memsz == 0,
 ASSERT(ALIGNOF(.tdata) <= TLS_ALIGNMENT && ALIGNOF(.tbss) <= TLS_ALIGNMENT,
        "_Thread_local _Alignof can't exceed TLS_ALIGNMENT");
 
+#ifndef APE_DLL
 ASSERT(DEFINED(main), "main() function not defined");
+#endif
 
 /* Let's not be like Knight Capital. */
 /* NOCROSSREFS_TO(.test .text) */

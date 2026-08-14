@@ -46,4 +46,40 @@
 #error "IMAGE_BASE_REAL must be 4kb aligned"
 #endif
 
+#ifdef __ASSEMBLER__
+//	Publishes a symbol in the PE export directory, so The New
+//	Technology can find it by name when the image is a library.
+//
+//	The three parallel arrays are built from decentralized fragments
+//	the linker sorts by name. Since the function and name arrays sort
+//	on the same key they stay aligned, so each ordinal is just the
+//	index of its own slot.
+//
+//	The assembler can't take the difference of two symbols in
+//	different sections, so the index comes from a counter here, which
+//	means .export directives have to be listed in the order the linker
+//	will sort them: alphabetically. A generated export list gets that
+//	for free.
+//
+//	@see	ape/ape.S for the directory this feeds
+ape_export_index = 0
+.macro	.export	symbol:req
+ .section .sort.rodata.pe.edata.2.1.\symbol,"a",@progbits
+.Lpe.func.\symbol:
+	.long	RVA(\symbol)
+ .previous
+ .section .sort.rodata.pe.edata.3.1.\symbol,"a",@progbits
+	.long	RVA(.Lpe.name.\symbol)
+ .previous
+ .section .sort.rodata.pe.edata.4.1.\symbol,"a",@progbits
+	.short	ape_export_index
+ .previous
+ ape_export_index = ape_export_index + 1
+ .section .sort.rodata.pe.edata.6.1.\symbol,"a",@progbits
+.Lpe.name.\symbol:
+	.asciz	"\symbol"
+ .previous
+.endm
+#endif /* __ASSEMBLER__ */
+
 #endif /* COSMOPOLITAN_APE_RELOCATIONS_H_ */
