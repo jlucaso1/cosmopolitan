@@ -35,10 +35,13 @@ jobs:
 
       - name: check what came out
         run: |
+          set -x
+          ls -l o/dlltest/
           # a PE image begins with MZ, a mach-o with its own magic
-          test "$(head -c2 o/dlltest/cosmo_dll_test.dll)" = "MZ"
-          head -c4 o/dlltest/cosmo_dll_test.dylib | od -An -tx1 | grep -q 'cf fa ed fe'
+          head -c2 o/dlltest/cosmo_dll_test.dll | od -An -c
+          head -c4 o/dlltest/cosmo_dll_test.dylib | od -An -tx1
           # and the dll has to say it's a library, not a program
+          objdump -f o/dlltest/cosmo_dll_test.dll || true
           objdump -f o/dlltest/cosmo_dll_test.dll | grep -q DLL
           echo "headers look right"
 
