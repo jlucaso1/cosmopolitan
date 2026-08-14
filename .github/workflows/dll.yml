@@ -35,14 +35,14 @@ jobs:
 
       - name: check what came out
         run: |
-          set -x
-          ls -l o/dlltest/
           # a PE image begins with MZ, a mach-o with its own magic
-          head -c2 o/dlltest/cosmo_dll_test.dll | od -An -c
-          head -c4 o/dlltest/cosmo_dll_test.dylib | od -An -tx1
-          # and the dll has to say it's a library, not a program
-          objdump -f o/dlltest/cosmo_dll_test.dll || true
-          objdump -f o/dlltest/cosmo_dll_test.dll | grep -q DLL
+          head -c2 o/dlltest/cosmo_dll_test.dll | od -An -c | grep -q 'M   Z'
+          head -c4 o/dlltest/cosmo_dll_test.dylib | od -An -tx1 | grep -q 'cf fa ed fe'
+          # the dll has to say it's a library rather than a program, which
+          # lives in the pe characteristics word, so -p and not -f
+          objdump -p o/dlltest/cosmo_dll_test.dll | grep -q DLL
+          # nothing here reads mach-o, so the dylib is only checked for its
+          # magic. the macos job proves the rest by loading it.
           echo "headers look right"
 
       - uses: actions/upload-artifact@v4
