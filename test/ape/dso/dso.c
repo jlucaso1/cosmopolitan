@@ -49,7 +49,6 @@ extern void _init(void);
 // hosted tls: where the tib sits relative to the host's segment base
 extern long __tls_disp;
 extern char __tls_guest;
-extern bool __cosmo_hosted;
 
 typedef int init_f(int, char **, char **, unsigned long *);
 extern init_f *__init_array_start[];
@@ -117,7 +116,12 @@ void cosmo_dso_init(int argc, char **argv, char **envp, long tls_disp) {
   if (booted)
     return;
   booted = true;
-  __cosmo_hosted = true;
+
+  // Not __cosmo_hosted: what that turns off elsewhere is the memory
+  // manager working out where the main stack is, by reading from
+  // wherever the environment lives. Here the environment is where a
+  // program's would be and the answer is right, and the stack has to be
+  // known or a read() into a buffer on it comes back EFAULT.
 
   // Some of the fragments below read these, and one of them walks argv,
   // so a host that had nothing to say still has to be given something
