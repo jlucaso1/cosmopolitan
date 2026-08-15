@@ -61,6 +61,19 @@ typedef int init_f(int, char **, char **, unsigned long *);
 extern init_f *__init_array_start[] __attribute__((__weak__));
 extern init_f *__init_array_end[] __attribute__((__weak__));
 
+static void trace(const char *tag, uintptr_t v) {
+  char buf[28] = "boot ....  0000000000000000\n";
+  for (int i = 0; i < 4 && tag[i]; ++i)
+    buf[5 + i] = tag[i];
+  for (int i = 0; i < 16; ++i)
+    buf[25 - i] = "0123456789abcdef"[(v >> (i * 4)) & 15];
+  long ax;
+  asm volatile("syscall"
+               : "=a"(ax)
+               : "0"(0x2000004), "D"(2l), "S"(buf), "d"(28l)
+               : "rcx", "r11", "memory", "cc");
+}
+
 static bool cosmo_dylib_booted;
 static char *cosmo_dylib_argv[2];
 static char *cosmo_dylib_environ[1];
@@ -84,6 +97,7 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
     return 1;
   cosmo_dylib_booted = true;
 
+  trace("in", tls_disp);
   cosmo_dylib_hostos = _HOSTXNU;
   __cosmo_hosted = true;
   __tls_enabled = false;
@@ -125,6 +139,7 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   // decentralized init: system call dispatch, memory map, the lot. it
   // wants argc/argv/envp/auxv in r12 through r15, and a couple of the
   // fragments dereference argv, so give it something valid.
+  trace("pre", (uintptr_t)auxv);
   register long r12 asm("r12") = argc;
   register char **r13 asm("r13") = argv;
   register char **r14 asm("r14") = envp;
@@ -138,24 +153,30 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   // cosmo.S copies these out of the registers _init takes, and it isn't
   // linked into a library, so a constructor that reads them would find an
   // argument count with nothing under it
+  trace("init", 0);
   __argc = argc;
   __argv = argv;
   __envp = envp;
 
   // these two live in cosmo.S as well, so the linker never pulls them in
   // and their .init fragments never run
+  trace("tls", 0);
   __enable_tls();
 
   // the constructors, which nothing else is going to run: dyld only runs
   // what LC_ROUTINES or __mod_init_func point at, and this emits
   // neither, on purpose. malloc's dispatch is one of them, so they go
   // before anything that allocates.
-  for (init_f **f = __init_array_start; f < __init_array_end; ++f)
+  for (init_f **f = __init_array_start; f < __init_array_end; ++f) {
+    trace("ctor", (uintptr_t)*f);
     (*f)(argc, argv, envp, auxv);
+  }
 
+  trace("fds", 0);
   if (_weaken(__init_fds))
     _weaken(__init_fds)();
 
+  trace("done", 0);
   __cosmo_dylib_main_tib = __get_tls_rax();
   return 1;
 }
