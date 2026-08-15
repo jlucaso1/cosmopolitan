@@ -434,23 +434,18 @@ SECTIONS {
     _tbss_end = .;
   } :Tls
 
-/*	The import address table is claimed further down by the broad
-	KEEP over .piro.data.sort.*, which runs before the /DISCARD/ that
-	means to drop it. Left there, it points at a hint/name table that
-	was discarded, and the link fails on every windows import in the
-	archive. So say goodbye to it here, while the pattern is still
-	specific enough to win. */
-#if !SupportsWindows()
-  /DISCARD/ : {
-    *(.piro.data.sort.iat.*)
-  }
-#endif
-
   .idata : {
-#if SupportsWindows()
+/*	The import address table is claimed further down by the broad KEEP
+	over .piro.data.sort.*, whatever the support vector says, so the
+	/DISCARD/ that means to drop it never gets the chance. The hint and
+	name tables it points at have to survive with it, or every windows
+	import the archive drags in fails to link against a discarded
+	section. Dead weight in a library that will never run there, and
+	the alternative is a dangling table. */
     KEEP(*(.dllstr));
     KEEP(*(.idata.ro));
     KEEP(*(SORT_BY_NAME(.idata.ro.*)));
+#if SupportsWindows()
     KEEP(*(SORT_BY_NAME(.piro.data.sort.iat.*)));
     KEEP(*(.data.nt.*));
 #endif
