@@ -1009,7 +1009,7 @@ ape_macho:
 //	A library has no entry thread. What it needs instead is an
 //	identity, and a symbol table dyld can bind against.
 60:	.long	MAC_LC_ID_DYLIB
-	.long	80f-60b				// cmdsize
+	.long	70f-60b				// cmdsize
 	.long	24				// name offset into this command
 	.long	0				// timestamp
 	.long	0x10000				// current version 1.0.0
