@@ -434,6 +434,18 @@ SECTIONS {
     _tbss_end = .;
   } :Tls
 
+/*	The import address table is claimed further down by the broad
+	KEEP over .piro.data.sort.*, which runs before the /DISCARD/ that
+	means to drop it. Left there, it points at a hint/name table that
+	was discarded, and the link fails on every windows import in the
+	archive. So say goodbye to it here, while the pattern is still
+	specific enough to win. */
+#if !SupportsWindows()
+  /DISCARD/ : {
+    *(.piro.data.sort.iat.*)
+  }
+#endif
+
   .idata : {
 #if SupportsWindows()
     KEEP(*(.dllstr));
