@@ -230,33 +230,34 @@ def global_offset_table(debug, image, segments):
     unit goes through the global offset table, and the entries in it are
     the linker's own doing, so there is no relocation record saying they
     hold addresses. They do, and dyld has to be told, or every symbol
-    outside the file being read comes back at the address it had before
-    the library was placed.
+    outside the file doing the reading comes back at the address it had
+    before the library was placed.
+
+    The linker script brackets the table for us.
     """
     out = subprocess.run(
-        ["readelf", "-SW", debug],
+        ["nm", debug],
         check=True,
         capture_output=True,
         env=dict(os.environ, LC_ALL="C"),
     ).stdout.decode(errors="replace")
+    edges = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[2] in ("__got_start", "__got_end"):
+            edges[parts[2]] = int(parts[0], 16)
+    if len(edges) != 2:
+        raise ValueError("the linker script stopped bracketing the got")
     low = min(s.vmaddr for s in segments)
     high = max(s.vmaddr + s.vmsize for s in segments)
     found = []
-    for line in out.splitlines():
-        m = re.search(r"\.(got|got\.plt|igot\.plt)\s+PROGBITS\s+([0-9a-f]+)\s+([0-9a-f]+)\s+([0-9a-f]+)", line)
-        if not m:
+    for at in range(edges["__got_start"], edges["__got_end"], POINTER_SIZE):
+        seg = next((s for s in segments if s.holds(at)), None)
+        if not seg or at - seg.vmaddr >= seg.filesize:
             continue
-        addr = int(m.group(2), 16)
-        size = int(m.group(4), 16)
-        for at in range(addr, addr + size, POINTER_SIZE):
-            seg = next((s for s in segments if s.holds(at)), None)
-            if not seg or at - seg.vmaddr >= seg.filesize:
-                continue
-            value = struct.unpack_from(
-                "<Q", image, seg.fileoff + (at - seg.vmaddr)
-            )[0]
-            if low <= value < high:
-                found.append(at)
+        value = struct.unpack_from("<Q", image, seg.fileoff + (at - seg.vmaddr))[0]
+        if low <= value < high:
+            found.append(at)
     return found
 
 
