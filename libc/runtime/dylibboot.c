@@ -97,9 +97,17 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   cosmo_dylib_booted = true;
 
   trace("in", tls_disp);
+  trace("&os", (uintptr_t)&cosmo_dylib_hostos);
+  trace("&ho", (uintptr_t)&__cosmo_hosted);
+  trace("&te", (uintptr_t)&__tls_enabled);
+  trace("&td", (uintptr_t)&__tls_disp);
+  trace("self", (uintptr_t)&cosmo_dylib_booted);
   cosmo_dylib_hostos = _HOSTXNU;
+  trace("w1", 0);
   __cosmo_hosted = true;
+  trace("w2", 0);
   __tls_enabled = false;
+  trace("w3", 0);
 
   if (tls_disp) {
     __tls_disp = tls_disp;
