@@ -135,7 +135,7 @@ o/$(MODE)/libc/calls/timeval_frommicros.o: private	\
 			-O2
 
 ifeq ($(ARCH), aarch64)
-o/$(MODE)/libc/calls/sigaction.o: private CFLAGS += -mcmodel=large
+o/$(MODE)/libc/calls/sigaction.o: private CFLAGS += $(COSMO_LARGE)
 o/$(MODE)/libc/calls/getloadavg-nt.o: private CFLAGS += -ffreestanding
 endif
 

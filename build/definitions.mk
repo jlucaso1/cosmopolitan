@@ -116,6 +116,11 @@ DEFAULT_COPTS +=							\
 	-fsigned-char
 endif
 
+# The large code model is for reaching the fixed addresses these use,
+# and it can't be combined with -fPIC, which a shared object has to have.
+# A library lives wherever it's put, so nothing is far away.
+COSMO_LARGE = $(if $(findstring -fPIC,$(CONFIG_CCFLAGS)),,-mcmodel=large)
+
 MATHEMATICAL =								\
 	-O3								\
 	-fwrapv

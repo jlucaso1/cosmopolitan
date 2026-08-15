@@ -91,7 +91,7 @@ ifeq ($(ARCH), aarch64)
 o/$(MODE)/libc/runtime/mmap.o				\
 o/$(MODE)/libc/runtime/enable_tls.o: private		\
 		CFLAGS +=				\
-			-mcmodel=large
+			$(COSMO_LARGE)
 endif
 
 o/$(MODE)/libc/runtime/.cosmo.zip.o: private		\
