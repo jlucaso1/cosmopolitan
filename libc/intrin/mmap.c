@@ -16,6 +16,14 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+// a library bringing this up inside somebody else's process can say so
+void __cosmo_boot_trace(const char *, unsigned long) __attribute__((weak));
+#define TRACE(s, v)             \
+  do {                          \
+    if (__cosmo_boot_trace)     \
+      __cosmo_boot_trace(s, v); \
+  } while (0)
+
 #include "ape/sections.internal.h"
 #include "libc/assert.h"
 #include "libc/calls/calls.h"
@@ -632,9 +640,11 @@ static void *__mmap_impl(char *addr, size_t size, int prot, int flags, int fd,
   }
 
   // allocate Map object
+  TRACE("mm alloc", size);
   struct Map *map;
   if (!(map = __maps_alloc()))
     return MAP_FAILED;
+  TRACE("mm got", (unsigned long)map);
 
   // polyfill nuances of fixed mappings
   int sysflags = flags;
@@ -665,6 +675,7 @@ static void *__mmap_impl(char *addr, size_t size, int prot, int flags, int fd,
   }
 
   // loop for memory
+  TRACE("mm loop", 0);
   int olderr = errno;
   struct DirectMap res;
   for (;;) {
