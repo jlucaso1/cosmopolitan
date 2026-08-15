@@ -241,6 +241,8 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   // what LC_ROUTINES or __mod_init_func point at, and this emits
   // neither, on purpose. malloc's dispatch is one of them, so they go
   // before anything that allocates.
+  __cosmo_boot_trace("cbeg", (uintptr_t)__init_array_start);
+  __cosmo_boot_trace("cend", (uintptr_t)__init_array_end);
   for (init_f **f = __init_array_start; f < __init_array_end; ++f) {
     (*f)(argc, argv, envp, auxv);
   }
