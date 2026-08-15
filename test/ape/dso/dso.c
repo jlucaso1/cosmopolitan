@@ -49,6 +49,7 @@ extern void _init(void);
 // hosted tls: where the tib sits relative to the host's segment base
 extern long __tls_disp;
 extern char __tls_guest;
+extern bool __cosmo_hosted;
 
 typedef int init_f(int, char **, char **, unsigned long *);
 extern init_f *__init_array_start[];
@@ -72,26 +73,8 @@ void cosmo_dso_init(int, char **, char **, long);
 
 // initial-exec, so its displacement from the segment base is fixed and
 // the same for every thread, which is what makes it usable as the slot
-static __thread void *cosmo_dso_tib __attribute__((tls_model("initial-exec")));
-
-/**
- * Where this thread's storage begins, without reading it.
- *
- * The obvious way is a bare %fs read, which is exactly what the wrapper
- * this file is compiled with rewrites into a call to the getters, and
- * the getters are what we're on our way to setting up.
- */
-static long cosmo_dso_segment_base(void) {
-  long base = 0;
-  register long rax asm("rax") = 158;      // arch_prctl
-  register long rdi asm("rdi") = 0x1003;   // ARCH_GET_FS
-  register long *rsi asm("rsi") = &base;
-  asm volatile("syscall"
-               : "+r"(rax)
-               : "r"(rdi), "r"(rsi)
-               : "rcx", "r11", "memory", "cc");
-  return base;
-}
+static __thread void *cosmo_dso_tib
+    __attribute__((tls_model("initial-exec"), used));
 
 /**
  * Brings the runtime up when the library is loaded.
@@ -105,8 +88,14 @@ static long cosmo_dso_segment_base(void) {
  * loader that placed us, at a displacement every thread shares.
  */
 void cosmo_dso_autoboot(void) {
-  cosmo_dso_init(0, 0, environ,
-                 (char *)&cosmo_dso_tib - (char *)cosmo_dso_segment_base());
+  // Asking for the variable's address would read the segment register,
+  // which is what the wrapper this file is compiled with rewrites into a
+  // call to the getters, and the getters are what this is on its way to
+  // setting up. What's wanted is only the displacement, and the loader
+  // has already written that down.
+  long disp;
+  asm("mov\tcosmo_dso_tib@gottpoff(%%rip),%0" : "=r"(disp));
+  cosmo_dso_init(0, 0, 0, disp);
 }
 
 /**
@@ -124,6 +113,7 @@ void cosmo_dso_init(int argc, char **argv, char **envp, long tls_disp) {
   if (booted)
     return;
   booted = true;
+  __cosmo_hosted = true;
 
   if (tls_disp) {
     __tls_disp = tls_disp;
