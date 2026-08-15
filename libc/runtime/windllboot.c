@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#ifdef __x86_64__
 #include "libc/atomic.h"
 #include "libc/dce.h"
 #include "libc/intrin/maps.h"
@@ -154,3 +155,5 @@ __msabi bool cosmo_dll_boot(void) {
   __cosmo_hosted_main_tib = __get_tls_win32();
   return true;
 }
+
+#endif /* __x86_64__ */

@@ -40,7 +40,12 @@
 
 extern struct CosmoTib *__cosmo_hosted_main_tib;
 
+#ifdef __x86_64__
 struct CosmoTib *__get_tls_rax(void);
+#define __get_tls_here() __get_tls_rax()
+#else
+#define __get_tls_here() __get_tls()
+#endif
 
 /**
  * Adopts a thread the host created.
@@ -58,7 +63,7 @@ struct CosmoTib *__get_tls_rax(void);
 static int cosmo_hosted_thread_init(void) {
   if (!__cosmo_hosted_main_tib)
     return -1;
-  if (__get_tls_rax())
+  if (__get_tls_here())
     return 0;  // already adopted
 
   // _mktls() copies ftrace, strace and the signal mask off the current
@@ -97,7 +102,7 @@ static int cosmo_hosted_thread_init(void) {
  * Hands back what the adoption took.
  */
 static void cosmo_hosted_thread_fini(void) {
-  struct CosmoTib *tib = __get_tls_rax();
+  struct CosmoTib *tib = __get_tls_here();
   if (!tib || tib == __cosmo_hosted_main_tib)
     return;
   void *tls = tib->tib_keys_dynamic;
