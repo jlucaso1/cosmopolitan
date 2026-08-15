@@ -181,7 +181,6 @@ static void publish(napi_env env, napi_value exports, const char *name,
   napi_set_named_property_(env, exports, name, value);
 }
 
-#ifndef NDEBUG
 // Says how far registration got, for when it doesn't get all the way.
 // A raw write, since the runtime it would otherwise go through is the
 // thing being brought up.
@@ -194,9 +193,6 @@ static void say(const char *what) {
                : "rcx", "r11", "memory", "cc");
 #endif
 }
-#else
-#define say(x) (void)0
-#endif
 
 /**
  * What node calls once it has opened the file.
