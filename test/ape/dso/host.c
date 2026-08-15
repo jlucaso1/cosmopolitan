@@ -96,7 +96,21 @@ int main(int argc, char **argv) {
 
   long disp = (char *)&cosmo_tib - (char *)before;
   printf("      hosted tls slot at %%fs%+ld\n", disp);
-  guest_init(argc, argv, environ, disp);
+  // A host that has arguments can pass them, and one that doesn't can
+  // say nothing at all: an addon is opened by a runtime that never
+  // offered any. Both are worth covering, and the second is the one
+  // that finds things.
+  if (getenv("COSMO_DSO_BOOT_BARE")) {
+    void (*bare)(void) = (void (*)(void))sym(h, "cosmo_dso_boot");
+    if (!bare) {
+      printf("FAIL: no cosmo_dso_boot\n");
+      return 3;
+    }
+    printf("      starting the guest with nothing to go on\n");
+    bare();
+  } else {
+    guest_init(argc, argv, environ, disp);
+  }
   check(fsbase() == before, "host thread pointer survives guest startup");
 
   check(guest_add(20, 22) == 42, "cosmo_dso_add(20, 22) = 42");

@@ -160,7 +160,10 @@ jobs:
           readelf -h o/dsotest/cosmo_dso_test.so | grep -q 'DYN'
 
       - name: load it
-        run: o/dsotest/host o/dsotest/cosmo_dso_test.so
+        run: |
+          o/dsotest/host o/dsotest/cosmo_dso_test.so
+          echo "--- and again, with the host saying nothing ---"
+          COSMO_DSO_BOOT_BARE=1 timeout 60 o/dsotest/host o/dsotest/cosmo_dso_test.so
 
       - name: build the node addon and run it
         run: |
