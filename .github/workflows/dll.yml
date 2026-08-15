@@ -81,6 +81,40 @@ jobs:
           name: dylib
           path: o/dlltest/cosmo_dll_test.dylib
 
+  aarch64:
+    runs-on: ubuntu-latest
+    # The first question a native arm64 library has to answer is whether
+    # the libc builds for it at all as position independent code with the
+    # guest paths turned on. Everything else waits on that.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: fetch the toolchain
+        run: |
+          build/download-cosmocc.sh \
+            ".cosmocc/${COSMOCC_VERSION}" \
+            "${COSMOCC_VERSION}" \
+            "${COSMOCC_SHA256}"
+
+      - name: build the libc for arm64 as a guest
+        run: |
+          make -j"$(nproc)" MODE=aarch64 \
+               CONFIG_CCFLAGS+=-fPIC \
+               "CONFIG_CPPFLAGS+=-DCOSMO_DSO -DSUPPORT_VECTOR=8" \
+               PKG=test/ape/dso/package.sh \
+               o/aarch64/cosmopolitan.a
+
+      - name: what's left that a shared object can't have
+        run: |
+          # an absolute address in an allocatable section is what stops a
+          # link, so count them before trying to link anything
+          .cosmocc/${COSMOCC_VERSION}/bin/aarch64-linux-cosmo-readelf -rW \
+              o/aarch64/cosmopolitan.a 2>/dev/null |
+            awk '/^Relocation section/{s=$3}
+                 /R_AARCH64_ABS(64|32)[ \t]/{if (s !~ /debug/ && s !~ /yoink/) print s}' |
+            sort | uniq -c | sort -rn | head -20
+
   linux:
     runs-on: ubuntu-latest
     # Most of this is building the libc twice over: as position independent
