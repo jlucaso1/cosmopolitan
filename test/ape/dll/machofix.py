@@ -223,6 +223,43 @@ def absolute_words(debug, segments, text_begins):
     return sorted(found)
 
 
+def global_offset_table(debug, image, segments):
+    """The words the linker made rather than copied.
+
+    A position independent reference to something in another translation
+    unit goes through the global offset table, and the entries in it are
+    the linker's own doing, so there is no relocation record saying they
+    hold addresses. They do, and dyld has to be told, or every symbol
+    outside the file being read comes back at the address it had before
+    the library was placed.
+    """
+    out = subprocess.run(
+        ["readelf", "-SW", debug],
+        check=True,
+        capture_output=True,
+        env=dict(os.environ, LC_ALL="C"),
+    ).stdout.decode(errors="replace")
+    low = min(s.vmaddr for s in segments)
+    high = max(s.vmaddr + s.vmsize for s in segments)
+    found = []
+    for line in out.splitlines():
+        m = re.search(r"\.(got|got\.plt|igot\.plt)\s+PROGBITS\s+([0-9a-f]+)\s+([0-9a-f]+)\s+([0-9a-f]+)", line)
+        if not m:
+            continue
+        addr = int(m.group(2), 16)
+        size = int(m.group(4), 16)
+        for at in range(addr, addr + size, POINTER_SIZE):
+            seg = next((s for s in segments if s.holds(at)), None)
+            if not seg or at - seg.vmaddr >= seg.filesize:
+                continue
+            value = struct.unpack_from(
+                "<Q", image, seg.fileoff + (at - seg.vmaddr)
+            )[0]
+            if low <= value < high:
+                found.append(at)
+    return found
+
+
 def rebase_opcodes(addrs, segments):
     out = bytearray()
     out.append(REBASE_OPCODE_SET_TYPE_IMM | REBASE_TYPE_POINTER)
@@ -264,6 +301,9 @@ def main(path, debug):
     fill_export_addresses(image, trieoff, base, symbol_addresses(image, symtab))
 
     addrs = absolute_words(debug, segments, text_begins)
+    got = global_offset_table(debug, image, segments)
+    print("%d of them are global offset table entries" % len(got))
+    addrs = sorted(set(addrs) | set(got))
     print("headers end at %#x" % text_begins)
     opcodes = rebase_opcodes(addrs, segments)
     if len(opcodes) > rebase_size:
