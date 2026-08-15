@@ -38,8 +38,6 @@
 #include "libc/stdio/stdio.h"
 #include "libc/str/str.h"
 
-#ifdef __x86_64__
-
 #if SupportsWindows()
 #define EXPORTED __attribute__((__ms_abi__))
 #else
@@ -60,26 +58,22 @@ EXPORTED int cosmo_dll_add(int a, int b) {
 __msabi bool cosmo_dll_boot(void);
 #endif
 
-/**
- * Reports the process this is running in, formatted by cosmopolitan.
- *
- * Where the one above only has to be reachable, this has to work: it
- * brings the runtime up inside the host and then asks it for a system
- * call, some formatting and a little heap. Returns the pid, which the
- * host compares against its own.
- *
- * Booting from here rather than from the library entry keeps us out from
- * under the loader lock, which is also how node calls a native addon.
- */
+#if SupportsWindows()
 /**
  * Brings the runtime up and returns, touching nothing else.
  */
-#if SupportsWindows()
 EXPORTED int cosmo_dll_init(void) {
   return cosmo_dll_boot() ? 1 : 0;
 }
 #endif
 
+/**
+ * Reports the process this is running in, formatted by cosmopolitan.
+ *
+ * Where the one above only has to be reachable, this has to work: it
+ * asks the runtime for a system call, some formatting and a little heap.
+ * Returns the pid, which the host compares against its own.
+ */
 EXPORTED int cosmo_dll_probe(char *out, int size) {
 #if SupportsWindows()
   // there is nothing for a windows host to pass us, so the library
@@ -98,4 +92,3 @@ EXPORTED int cosmo_dll_probe(char *out, int size) {
   return pid;
 }
 
-#endif /* __x86_64__ */

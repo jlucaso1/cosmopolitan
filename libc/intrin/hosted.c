@@ -45,3 +45,14 @@ bool __cosmo_hosted;
  * and building one for them starts by borrowing this.
  */
 struct CosmoTib *__cosmo_hosted_main_tib;
+
+/**
+ * The thread local slot the host set aside for the guest's tib.
+ *
+ * On x86 what matters is the displacement from the segment base, which
+ * is what __tls_disp holds. Here there is no segment: the thread pointer
+ * lives in a register the host may be using for something else, so what
+ * gets kept is the key, and every entry point loads the register from
+ * the slot it names.
+ */
+long __cosmo_hosted_tls_key;

@@ -43,8 +43,11 @@
 
 extern char cosmo_dylib_hostos asm("__hostos");
 
+#ifdef __x86_64__
 extern long __tls_disp;
 extern char __tls_guest;
+#endif
+extern long __cosmo_hosted_tls_key;
 extern bool __cosmo_hosted;
 
 void _init(void);
@@ -143,8 +146,12 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   __tls_enabled_set(false);
 
   if (tls_disp) {
+#ifdef __x86_64__
     __tls_disp = tls_disp;
     __tls_guest = 1;
+#else
+    __cosmo_hosted_tls_key = tls_disp / sizeof(void *);
+#endif
   }
 
   // apple silicon has bigger pages than intel does
