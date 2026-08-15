@@ -110,10 +110,23 @@ void cosmo_dso_init(int argc, char **argv, char **envp, long tls_disp) {
   // the library brings itself up when it's opened, so a host that also
   // asks finds it already done rather than doing it twice
   static bool booted;
+  static char *fallback_argv[2];
+  static char *fallback_environ[1];
   if (booted)
     return;
   booted = true;
   __cosmo_hosted = true;
+
+  // Some of the fragments below read these, and one of them walks argv,
+  // so a host that had nothing to say still has to be given something
+  // rather than nothing.
+  if (!argv) {
+    fallback_argv[0] = (char *)"cosmo";
+    argv = fallback_argv;
+    argc = 1;
+  }
+  if (!envp)
+    envp = fallback_environ;
 
   if (tls_disp) {
     __tls_disp = tls_disp;
