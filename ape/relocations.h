@@ -64,6 +64,8 @@
 #endif
 
 #ifdef __ASSEMBLER__
+#include "libc/dce.h"
+
 //	Publishes a symbol in the PE export directory, so The New
 //	Technology can find it by name when the image is a library.
 //

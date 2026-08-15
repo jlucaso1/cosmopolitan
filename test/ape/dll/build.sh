@@ -35,6 +35,13 @@ case "$TARGET" in
   *) echo "usage: $0 windows|macos|arm64" >&2; exit 1 ;;
 esac
 
+TLSCC=
+REDZONE=
+if [ "$ARCH" = x86_64 ]; then
+  TLSCC=build/bootstrap/tlscc
+  REDZONE=-mno-red-zone
+fi
+
 CC="$COSMOCC/bin/$ARCH-linux-cosmo-gcc"
 LD="$COSMOCC/bin/$ARCH-linux-cosmo-ld.bfd"
 OBJCOPY="$COSMOCC/bin/$ARCH-linux-cosmo-objcopy"
@@ -48,7 +55,10 @@ VECTORFLAG=${VECTOR:+-DSUPPORT_VECTOR=$VECTOR}
 LIBC=${LIBC_A:-o/$MODE/cosmopolitan.a}
 if [ ! -f "$LIBC" ]; then
   if [ -n "$PIC" ]; then
-    make -j"$(nproc)" MODE=$MODE TLSCC=build/bootstrap/tlscc \
+    # tlscc rewrites direct %fs accesses, which is an x86 concern; the
+    # other architecture keeps its thread pointer in a register
+    make -j"$(nproc)" MODE=$MODE \
+         ${TLSCC:+TLSCC=$TLSCC} \
          CONFIG_CCFLAGS+=-fPIC \
          "CONFIG_CPPFLAGS+=-DCOSMO_DSO $VECTORFLAG" \
          PKG=test/ape/dso/package.sh "$LIBC"
@@ -61,7 +71,7 @@ CFLAGS="-DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE ${PIC:--fno-pie} \
         ${PIC:+-DCOSMO_DSO} \
         -nostdinc -iquote. -I. -isystem libc/isystem \
         -include libc/integral/normalize.inc \
-        -O2 -mno-red-zone"
+        -O2 ${REDZONE}"
 
 # shellcheck disable=SC2086
 $CC $CFLAGS -c -o "$OUT/ape.o" ape/ape.S
