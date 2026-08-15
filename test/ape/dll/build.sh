@@ -27,6 +27,15 @@ set -eu
 NAME=${NAME:-cosmo_dll_test}
 SRCS=${SRCS:-"test/ape/dll/library.c test/ape/dll/exports.S test/ape/dll/exports2.S"}
 
+# Objects and archives that were built elsewhere, for a library whose code
+# this cannot compile: rust-ape's node addon hands over what cargo produced
+# and lets the rest of these steps apply to it. UNDEF names symbols to keep,
+# which an archive needs when nothing in the link refers to them -- an addon
+# entry point is looked up by name after the fact, so without it the member
+# holding it is never pulled in.
+EXTRA=${EXTRA:-}
+UNDEF=${UNDEF:-}
+
 TARGET=${1:-}
 COSMOCC=${COSMOCC:-.cosmocc/3.9.2}
 OUT=${OUT:-o/dlltest}
@@ -120,11 +129,18 @@ $CC -D__LINKER__ -DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE \
 # slide. Kept in the table, it is.
 # apple silicon has bigger pages, and dyld will not map a segment that
 # doesn't start on one
+UNDEFARGS=
+for sym in $UNDEF; do
+  UNDEFARGS="$UNDEFARGS --undefined=$sym"
+done
+
+# shellcheck disable=SC2086
 $LD -static -nostdlib -no-pie -z noexecstack -z norelro \
     -z common-page-size=$PAGE -z max-page-size=$PAGE --gc-sections \
     ${PIC:+--emit-relocs --no-relax --undefined=cosmo_dylib_routine} \
+    $UNDEFARGS \
     -T "$OUT/ape.lds" -o "$OUT/$NAME.dbg" \
-    "$OUT/ape.o" $MODOBJS $BOOT $THUNK $LIBC
+    "$OUT/ape.o" $MODOBJS $BOOT $THUNK $EXTRA $LIBC
 
 $OBJCOPY -S -O binary "$OUT/$NAME.dbg" "$OUT/$NAME.$SUFFIX"
 
