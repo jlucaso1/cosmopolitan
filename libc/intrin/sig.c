@@ -1001,11 +1001,10 @@ static unsigned long ParseUint64(const char *str) {
 }
 
 // fork() calls this too
-// Set when cosmopolitan is a library inside somebody else's process. The
-// exception handler below is installed first in the chain and never
+// the exception handler below is installed first in the chain and never
 // declines, and the console handler and the worker thread are likewise
-// process wide, so a guest has no business installing any of them.
-bool __cosmo_hosted;
+// process wide, so a guest has no business installing any of them
+extern bool __cosmo_hosted;
 
 __attribute__((__constructor__(10))) textstartup void __sig_init(void) {
   if (!IsWindows() || __cosmo_hosted)
