@@ -389,6 +389,16 @@ SECTIONS {
     KEEP(*(SORT_BY_NAME(.macho.trie.*)))
     ape_macho_trie_end = .;
 
+    /*	Room for the rebase opcodes, which say which words in the image
+	hold addresses that move when dyld slides it. They can't be
+	written until the link is done, so the space is reserved here and
+	filled afterwards. What isn't used stays zero, which is the opcode
+	for stop. */
+    . = ALIGN(. != 0 ? 8 : 0);
+    ape_macho_rebase = .;
+    . += APE_MACHO_REBASE_SIZE;
+    ape_macho_rebase_end = .;
+
     ape_linkedit_end = .;
 #endif /* APE_DLL */
     . = ALIGN(. != 0 ? CONSTANT(COMMONPAGESIZE) : 0); /* don't delete this line :o */
@@ -847,6 +857,8 @@ PFSTUB4(ape_macho_symoff, RVA(ape_macho_syms));
 PFSTUB4(ape_macho_nsyms, (ape_macho_syms_end - ape_macho_syms) / 16);
 PFSTUB4(ape_macho_stroff, RVA(ape_macho_strs));
 PFSTUB4(ape_macho_strsize, ape_macho_strs_end - ape_macho_strs);
+PFSTUB4(ape_macho_rebaseoff, RVA(ape_macho_rebase));
+PFSTUB4(ape_macho_rebasesize, APE_MACHO_REBASE_SIZE);
 PFSTUB4(ape_macho_trieoff, RVA(ape_macho_trie));
 PFSTUB4(ape_macho_triesize, ape_macho_trie_end - ape_macho_trie);
 

@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  dll:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,32 +34,52 @@ jobs:
             "${COSMOCC_VERSION}" \
             "${COSMOCC_SHA256}"
 
-      - name: build the dll and the dylib
-        run: |
-          test/ape/dll/build.sh windows
-          test/ape/dll/build.sh macos
+      - name: build the dll
+        run: test/ape/dll/build.sh windows
 
       - name: check what came out
         run: |
-          # a PE image begins with MZ, a mach-o with its own magic
+          # a PE image begins with MZ
           head -c2 o/dlltest/cosmo_dll_test.dll | od -An -c | grep -q 'M   Z'
-          head -c4 o/dlltest/cosmo_dll_test.dylib | od -An -tx1 | grep -q 'cf fa ed fe'
-          # the dll has to say it's a library rather than a program, which
+          # and has to say it's a library rather than a program, which
           # lives in the pe characteristics word, so -p and not -f
           objdump -p o/dlltest/cosmo_dll_test.dll | grep -q DLL
-          # the dylib has to carry an export trie, since that and not the
-          # symbol table is what dlsym reads
-          grep -q cosmo_dll_add o/dlltest/cosmo_dll_test.dylib
-          # nothing here reads mach-o, so the dylib is only checked for its
-          # magic. the macos job proves the rest by loading it.
-          echo "headers look right"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: shared-objects
-          path: |
-            o/dlltest/cosmo_dll_test.dll
-            o/dlltest/cosmo_dll_test.dylib
+          name: dll
+          path: o/dlltest/cosmo_dll_test.dll
+
+  dylib:
+    runs-on: ubuntu-latest
+    # The libc is built as position independent code for this one, which
+    # is a build of its own, so it can't share a machine with the dll.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: fetch the toolchain
+        run: |
+          build/download-cosmocc.sh \
+            ".cosmocc/${COSMOCC_VERSION}" \
+            "${COSMOCC_VERSION}" \
+            "${COSMOCC_SHA256}"
+
+      - name: build the dylib
+        run: test/ape/dll/build.sh macos
+
+      - name: check what came out
+        run: |
+          # a mach-o begins with its own magic
+          head -c4 o/dlltest/cosmo_dll_test.dylib | od -An -tx1 | grep -q 'cf fa ed fe'
+          # dlsym is answered from the export trie, so the names have to
+          # be in there
+          grep -q cosmo_dylib_boot o/dlltest/cosmo_dll_test.dylib
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dylib
+          path: o/dlltest/cosmo_dll_test.dylib
 
   linux:
     runs-on: ubuntu-latest
@@ -91,13 +111,13 @@ jobs:
         run: o/dsotest/host o/dsotest/cosmo_dso_test.so
 
   windows:
-    needs: build
+    needs: dll
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: shared-objects
+          name: dll
       - name: load it
         shell: bash
         run: |
@@ -113,7 +133,7 @@ jobs:
           ./host.exe
 
   macos:
-    needs: build
+    needs: dylib
     # The library ape emits today is x86-64, and the free runners are all
     # apple silicon now, so the host is built for intel too and the pair
     # runs under Rosetta. A native arm64 library needs the aarch64 path in
@@ -123,7 +143,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: shared-objects
+          name: dylib
       - name: load it
         run: |
           uname -m
@@ -134,7 +154,8 @@ jobs:
           dyld_info -exports cosmo_dll_test.dylib || true
           # dlsym is answered from the trie, so an empty listing above is
           # the failure to look at even when nm below has plenty to say
-          nm -gU cosmo_dll_test.dylib || true
+          echo "--- what dyld makes of the rebase information ---"
+          dyld_info -fixups cosmo_dll_test.dylib | head -20 || true
           echo "--- now try to use it ---"
           clang -arch x86_64 -o host test/ape/dll/host.c
           ./host

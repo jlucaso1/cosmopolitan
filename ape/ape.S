@@ -1023,8 +1023,16 @@ ape_macho:
 //	dlsym() is answered from the export trie, not the symbol table.
 //	Without this a library loads, and nm can even list what it has,
 //	but every lookup against it comes back empty handed.
-86:	.long	MAC_LC_DYLD_EXPORTS_TRIE
+//	dlsym() is answered from the export trie, not the symbol table, and
+//	the rebase opcodes are how dyld learns which words hold addresses,
+//	since it puts a library wherever it likes. Both live in __LINKEDIT.
+86:	.long	MAC_LC_DYLD_INFO_ONLY
 	.long	90f-86b				// cmdsize
+	.stub	ape_macho_rebaseoff,long
+	.stub	ape_macho_rebasesize,long
+	.long	0,0				// bind
+	.long	0,0				// weak bind
+	.long	0,0				// lazy bind
 	.stub	ape_macho_trieoff,long
 	.stub	ape_macho_triesize,long
 90:

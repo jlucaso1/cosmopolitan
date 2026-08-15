@@ -25,8 +25,8 @@ COSMOCC=${COSMOCC:-.cosmocc/3.9.2}
 OUT=${OUT:-o/dlltest}
 
 case "$TARGET" in
-  windows) VECTOR=; SUFFIX=dll ;;
-  macos)   VECTOR=8; SUFFIX=dylib ;;
+  windows) VECTOR=; SUFFIX=dll;   BOOTSRC=libc/runtime/windllboot.c; PIC= ;;
+  macos)   VECTOR=8; SUFFIX=dylib; BOOTSRC=libc/runtime/dylibboot.c; PIC=-fPIC ;;
   *) echo "usage: $0 windows|macos" >&2; exit 1 ;;
 esac
 
@@ -36,19 +36,27 @@ OBJCOPY="$COSMOCC/bin/x86_64-linux-cosmo-objcopy"
 
 mkdir -p "$OUT"
 
-LIBC=
-if [ -z "$VECTOR" ]; then
-  LIBC=${LIBC_A:-o//cosmopolitan.a}
-  [ -f "$LIBC" ] || make -j"$(nproc)" MODE= "$LIBC"
-  VECTORFLAG=
-else
-  VECTORFLAG=-DSUPPORT_VECTOR=$VECTOR
+# The mach-o side needs a libc built as position independent code, since
+# dyld slides a library wherever it likes and an absolute address in the
+# text would land in whatever happens to be there.
+VECTORFLAG=${VECTOR:+-DSUPPORT_VECTOR=$VECTOR}
+LIBC=${LIBC_A:-o//cosmopolitan.a}
+if [ ! -f "$LIBC" ]; then
+  if [ -n "$PIC" ]; then
+    make -j"$(nproc)" MODE= TLSCC=build/bootstrap/tlscc \
+         CONFIG_CCFLAGS+=-fPIC \
+         "CONFIG_CPPFLAGS+=-DCOSMO_DSO $VECTORFLAG" \
+         PKG=test/ape/dso/package.sh "$LIBC"
+  else
+    make -j"$(nproc)" MODE= "$LIBC"
+  fi
 fi
 
-CFLAGS="-DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE \
+CFLAGS="-DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE ${PIC:--fno-pie} \
+        ${PIC:+-DCOSMO_DSO} \
         -nostdinc -iquote. -I. -isystem libc/isystem \
         -include libc/integral/normalize.inc \
-        -O2 -fno-pie -mno-red-zone"
+        -O2 -mno-red-zone"
 
 # shellcheck disable=SC2086
 $CC $CFLAGS -c -o "$OUT/ape.o" ape/ape.S
@@ -57,27 +65,28 @@ $CC $CFLAGS -c -o "$OUT/exports.o" test/ape/dll/exports.S
 # shellcheck disable=SC2086
 $CC $CFLAGS -std=gnu2x -c -o "$OUT/library.o" test/ape/dll/library.c
 
-BOOT=
-if [ -n "$LIBC" ]; then
-  # shellcheck disable=SC2086
-  $CC $CFLAGS -std=gnu2x -c -o "$OUT/boot.o" libc/runtime/windllboot.c
-  BOOT="$OUT/boot.o"
-fi
+# shellcheck disable=SC2086
+$CC $CFLAGS -std=gnu2x -c -o "$OUT/boot.o" "$BOOTSRC"
+BOOT="$OUT/boot.o"
 
 $CC -D__LINKER__ -DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE \
     -E -P -xc -nostdinc -iquote. -I. -isystem libc/isystem \
     -o "$OUT/ape.lds" ape/ape.lds
 
+# --emit-relocs keeps the records of every absolute address the linker
+# resolved, which is what the mach-o rebase information is built from
 $LD -static -nostdlib -no-pie -z noexecstack -z norelro --gc-sections \
+    ${PIC:+--emit-relocs} \
     -T "$OUT/ape.lds" -o "$OUT/cosmo_dll_test.dbg" \
     "$OUT/ape.o" "$OUT/exports.o" "$OUT/library.o" $BOOT $LIBC
 
 $OBJCOPY -S -O binary "$OUT/cosmo_dll_test.dbg" "$OUT/cosmo_dll_test.$SUFFIX"
 
-# the export trie holds addresses as uleb128, which nothing before this
-# point can encode
+# the export trie and the rebase opcodes both hold what the link only
+# just decided, in encodings no relocation can carry
 if [ "$TARGET" = macos ]; then
-  python3 test/ape/dll/trieaddrs.py "$OUT/cosmo_dll_test.$SUFFIX"
+  python3 test/ape/dll/machofix.py "$OUT/cosmo_dll_test.$SUFFIX" \
+      "$OUT/cosmo_dll_test.dbg"
 fi
 
 ls -l "$OUT/cosmo_dll_test.$SUFFIX"

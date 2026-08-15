@@ -27,6 +27,15 @@
 #define RVA(x) ((x) - (IMAGE_BASE_VIRTUAL))
 
 /**
+ * How much of __LINKEDIT is set aside for mach-o rebase opcodes.
+ *
+ * They can't be written until the link is done, so the space is reserved
+ * and filled afterwards. Generous: what goes unused stays zero, which is
+ * the opcode that says stop.
+ */
+#define APE_MACHO_REBASE_SIZE 65536
+
+/**
  * Adjusts virtual address so it's relative to load address.
  */
 #define PHYSICAL(x) ((x) - (IMAGE_BASE_VIRTUAL - IMAGE_BASE_PHYSICAL))

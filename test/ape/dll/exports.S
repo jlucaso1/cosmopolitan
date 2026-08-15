@@ -27,8 +27,14 @@
 	.export	cosmo_dll_add
 #if SupportsWindows()
 	.export	cosmo_dll_init
+#endif
 	.export	cosmo_dll_probe
+#if SupportsWindows()
 	.export	cosmo_dll_thread_fini
 	.export	cosmo_dll_thread_init
+#endif
+#if SupportsXnu()
+	.export	cosmo_dylib_boot
+	.export	cosmo_dylib_fini
 #endif
 	.exports_end

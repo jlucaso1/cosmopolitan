@@ -23,7 +23,11 @@ static const char *why(void) {
 }
 #else
 #include <dlfcn.h>
+#include <pthread.h>
+#include <string.h>
+#include <unistd.h>
 #define LIBRARY "./cosmo_dll_test.dylib"
+extern char **environ;
 static void *load(const char *path) {
   return dlopen(path, RTLD_NOW | RTLD_LOCAL);
 }
@@ -68,7 +72,23 @@ static DWORD WINAPI thread_main(LPVOID arg) {
 }
 #endif
 
-int main(void) {
+#ifdef __APPLE__
+// Where the storage for a pthread key lives, relative to the segment
+// base. This is the arrangement the whole port rests on: cosmopolitan
+// keeps its thread information block at a fixed offset from %gs, and so
+// does libpthread, so the host hands over a slot of its own instead.
+static long tls_displacement(pthread_key_t key) {
+  return (long)key * sizeof(void *);
+}
+
+static void *read_gs(long disp) {
+  void *value;
+  asm("mov\t%%gs:(%1),%0" : "=r"(value) : "r"(disp));
+  return value;
+}
+#endif
+
+int main(int argc, char **argv) {
   // unbuffered, so a crash in the loader still leaves a trail
   setvbuf(stdout, 0, _IONBF, 0);
   printf("loading %s\n", LIBRARY);
@@ -92,6 +112,52 @@ int main(void) {
     return 3;
   }
   printf("ok: cosmo_dll_add(20, 22) = %d\n", got);
+
+#ifdef __APPLE__
+  // check the arrangement before relying on it: what pthread_setspecific
+  // writes has to be what a read through the displacement finds
+  pthread_key_t key;
+  if (pthread_key_create(&key, 0)) {
+    printf("FAIL: could not create a thread local slot\n");
+    return 4;
+  }
+  long disp = tls_displacement(key);
+  pthread_setspecific(key, (void *)0x1234);
+  if (read_gs(disp) != (void *)0x1234) {
+    printf("FAIL: %%gs%+ld is not where key %d lives\n", disp, (int)key);
+    return 5;
+  }
+  pthread_setspecific(key, 0);
+  printf("ok: the guest can keep its tib at %%gs%+ld\n", disp);
+
+  int (*boot)(int, char **, char **, long) =
+      (int (*)(int, char **, char **, long))sym(h, "cosmo_dylib_boot");
+  int (*probe)(char *, int) = (int (*)(char *, int))sym(h, "cosmo_dll_probe");
+  void (*fini)(void) = (void (*)(void))sym(h, "cosmo_dylib_fini");
+  if (!boot || !probe || !fini) {
+    printf("FAIL: could not find the runtime entry points: %s\n", why());
+    return 6;
+  }
+  if (!boot(argc, argv, environ, disp)) {
+    printf("FAIL: the runtime would not start\n");
+    return 7;
+  }
+  printf("ok: the runtime booted\n");
+
+  char buf[128] = "";
+  int pid = probe(buf, sizeof(buf));
+  if (pid != (int)getpid()) {
+    printf("FAIL: guest getpid said %d, this process is %d\n", pid,
+           (int)getpid());
+    return 8;
+  }
+  if (!strstr(buf, "cosmo libc says")) {
+    printf("FAIL: guest snprintf produced \"%s\"\n", buf);
+    return 9;
+  }
+  printf("ok: the guest runtime is up: %s\n", buf);
+  fini();
+#endif
 
 #ifdef _WIN32
   // The library carries the whole libc on this platform, so it can be

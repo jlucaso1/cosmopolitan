@@ -57,8 +57,8 @@ EXPORTED int cosmo_dll_add(int a, int b) {
 }
 
 #if SupportsWindows()
-
 __msabi bool cosmo_dll_boot(void);
+#endif
 
 /**
  * Reports the process this is running in, formatted by cosmopolitan.
@@ -74,13 +74,19 @@ __msabi bool cosmo_dll_boot(void);
 /**
  * Brings the runtime up and returns, touching nothing else.
  */
+#if SupportsWindows()
 EXPORTED int cosmo_dll_init(void) {
-  int ok = cosmo_dll_boot() ? 1 : 0;
-  return ok;
+  return cosmo_dll_boot() ? 1 : 0;
 }
+#endif
 
 EXPORTED int cosmo_dll_probe(char *out, int size) {
+#if SupportsWindows()
+  // there is nothing for a windows host to pass us, so the library
+  // brings the runtime up on first use. elsewhere the host has to hand
+  // over a thread local slot, so it calls cosmo_dylib_boot() itself.
   cosmo_dll_boot();
+#endif
   int pid = getpid();
   char *scratch = malloc(128);
   if (!scratch)
@@ -91,7 +97,5 @@ EXPORTED int cosmo_dll_probe(char *out, int size) {
   free(scratch);
   return pid;
 }
-
-#endif /* SupportsWindows() */
 
 #endif /* __x86_64__ */
