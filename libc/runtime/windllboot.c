@@ -54,7 +54,7 @@ extern init_f *__init_array_start[] __attribute__((__weak__));
 extern init_f *__init_array_end[] __attribute__((__weak__));
 
 static bool cosmo_dll_booted;
-struct CosmoTib *__cosmo_dll_main_tib;
+struct CosmoTib *__cosmo_hosted_main_tib;
 static char *cosmo_dll_argv[2];
 static char *cosmo_dll_environ[1];
 
@@ -151,6 +151,6 @@ __msabi bool cosmo_dll_boot(void) {
 
   // the plain __get_tls() is a bare %fs read, which is what tlscc exists
   // to rewrite; this file is windows only, so it says so itself
-  __cosmo_dll_main_tib = __get_tls_win32();
+  __cosmo_hosted_main_tib = __get_tls_win32();
   return true;
 }

@@ -64,7 +64,7 @@ static unsigned long empty_auxv[2];
 static bool cosmo_dylib_booted;
 static char *cosmo_dylib_argv[2];
 static char *cosmo_dylib_environ[1];
-struct CosmoTib *__cosmo_dylib_main_tib;
+struct CosmoTib *__cosmo_hosted_main_tib;
 
 /**
  * Starts Cosmopolitan Libc inside a host process.
@@ -164,7 +164,7 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   if (_weaken(__init_fds))
     _weaken(__init_fds)();
 
-  __cosmo_dylib_main_tib = __get_tls_rax();
+  __cosmo_hosted_main_tib = __get_tls_rax();
   return 1;
 }
 

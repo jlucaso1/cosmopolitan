@@ -36,5 +36,7 @@
 #if SupportsXnu()
 	.export	cosmo_dylib_boot
 	.export	cosmo_dylib_fini
+	.export	cosmo_dylib_thread_fini
+	.export	cosmo_dylib_thread_init
 #endif
 	.exports_end

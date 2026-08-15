@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "libc/atomic.h"
 #include "libc/calls/syscall-sysv.internal.h"
+#include "libc/dce.h"
 #include "libc/intrin/atomic.h"
 #include "libc/mem/mem.h"
 #include "libc/nt/files.h"
@@ -27,39 +28,42 @@
 #include "third_party/dlmalloc/dlmalloc.h"
 
 /**
- * @fileoverview Lending the runtime to threads a windows host made.
+ * @fileoverview Lending the runtime to threads the host made.
  *
- * This is the other half of libc/runtime/windllboot.c, and it lives here
- * rather than there because building a thread information block is the
- * thread library's business, and libc/runtime doesn't depend on it. A
- * weak reference wouldn't do: nothing else in a library pulls the thread
- * machinery in, so there would be nothing to point at.
+ * This is the other half of libc/runtime/windllboot.c and dylibboot.c,
+ * and it lives here rather than there because building a thread
+ * information block is the thread library's business, and libc/runtime
+ * doesn't depend on it. A weak reference wouldn't do: nothing else in a
+ * library pulls the thread machinery in, so there would be nothing to
+ * point at.
  */
 
-extern struct CosmoTib *__cosmo_dll_main_tib;
+extern struct CosmoTib *__cosmo_hosted_main_tib;
+
+struct CosmoTib *__get_tls_rax(void);
 
 /**
  * Adopts a thread the host created.
  *
- * Only the thread that called cosmo_dll_boot() has a tib. Any other one
+ * Only the thread that booted the runtime has a tib. Any other one
  * arrives with an empty slot, and the first thing to want thread local
  * storage, which is to say malloc or errno or stdio, reads a null
  * pointer. Cosmopolitan does this itself for the threads it creates,
  * where pthread_create() builds the tib and the clone installs it.
  *
  * A host calling in from a pool of its own has to do this on each of
- * those threads, and cosmo_dll_thread_fini() before letting one go.
- * Safe to call more than once on the same thread.
+ * those threads, and the teardown before letting one go. Safe to call
+ * more than once on the same thread.
  */
-__msabi int cosmo_dll_thread_init(void) {
-  if (!__cosmo_dll_main_tib)
+static int cosmo_hosted_thread_init(void) {
+  if (!__cosmo_hosted_main_tib)
     return -1;
-  if (__get_tls_win32())
+  if (__get_tls_rax())
     return 0;  // already adopted
 
   // _mktls() copies ftrace, strace and the signal mask off the current
   // tib, so it needs a valid one installed; lend it the main thread's
-  __set_tls(__cosmo_dll_main_tib);
+  __set_tls(__cosmo_hosted_main_tib);
   struct CosmoTib *tib;
   char *tls = _mktls(&tib);
   if (!tls) {
@@ -70,10 +74,13 @@ __msabi int cosmo_dll_thread_init(void) {
 
   // what __enable_tls() gives the main thread, and what anything that
   // suspends or signals a thread goes through
-  intptr_t hand;
-  DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(),
-                  &hand, 0, false, kNtDuplicateSameAccess);
-  atomic_init(&tib->tib_syshand, hand);
+  if (IsWindows()) {
+    intptr_t hand;
+    DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
+                    GetCurrentProcess(), &hand, 0, false,
+                    kNtDuplicateSameAccess);
+    atomic_init(&tib->tib_syshand, hand);
+  }
 
   tib->tib_keys_dynamic = (void *)tls;  // so the teardown can free it
 
@@ -87,17 +94,49 @@ __msabi int cosmo_dll_thread_init(void) {
 }
 
 /**
- * Hands back what cosmo_dll_thread_init() took.
+ * Hands back what the adoption took.
  */
-__msabi void cosmo_dll_thread_fini(void) {
-  struct CosmoTib *tib = __get_tls_win32();
-  if (!tib || tib == __cosmo_dll_main_tib)
+static void cosmo_hosted_thread_fini(void) {
+  struct CosmoTib *tib = __get_tls_rax();
+  if (!tib || tib == __cosmo_hosted_main_tib)
     return;
   void *tls = tib->tib_keys_dynamic;
   intptr_t hand = atomic_load_explicit(&tib->tib_syshand, memory_order_relaxed);
   tmspace_release(tib->tib_malloc);
   __set_tls(0);
-  if (hand)
+  if (IsWindows() && hand)
     CloseHandle(hand);
   free(tls);
 }
+
+#if SupportsWindows()
+/**
+ * Adopts a thread, for a host that speaks the microsoft convention.
+ */
+__msabi int cosmo_dll_thread_init(void) {
+  return cosmo_hosted_thread_init();
+}
+
+/**
+ * Hands back what cosmo_dll_thread_init() took.
+ */
+__msabi void cosmo_dll_thread_fini(void) {
+  cosmo_hosted_thread_fini();
+}
+#endif
+
+#if SupportsXnu()
+/**
+ * Adopts a thread the mach-o host made.
+ */
+int cosmo_dylib_thread_init(void) {
+  return cosmo_hosted_thread_init();
+}
+
+/**
+ * Hands back what cosmo_dylib_thread_init() took.
+ */
+void cosmo_dylib_thread_fini(void) {
+  cosmo_hosted_thread_fini();
+}
+#endif

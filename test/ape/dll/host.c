@@ -25,6 +25,7 @@ static const char *why(void) {
 #include <dlfcn.h>
 #include <pthread.h>
 #include <string.h>
+#include <stdint.h>
 #include <unistd.h>
 #define LIBRARY "./cosmo_dll_test.dylib"
 extern char **environ;
@@ -79,6 +80,39 @@ static DWORD WINAPI thread_main(LPVOID arg) {
 // does libpthread, so the host hands over a slot of its own instead.
 static long tls_displacement(pthread_key_t key) {
   return (long)key * sizeof(void *);
+}
+
+static int (*guest_thread_init)(void);
+static void (*guest_thread_fini)(void);
+static int (*guest_probe_fn)(char *, int);
+static int thread_failed;
+
+// a thread the host made, which enters the guest with an empty tib slot
+static void *thread_main(void *arg) {
+  char buf[128] = "";
+  if (guest_thread_init() != 0) {
+    printf("FAIL: could not adopt a host thread\n");
+    thread_failed = 1;
+    return 0;
+  }
+  int pid = guest_probe_fn(buf, sizeof(buf));
+  if (pid != (int)getpid()) {
+    printf("FAIL: guest getpid said %d on a host thread\n", pid);
+    thread_failed = 1;
+  }
+  // the guest has to know it isn't the thread it started on
+  uint64_t self;
+  pthread_threadid_np(0, &self);
+  char mine[32];
+  snprintf(mine, sizeof(mine), "tid=%d", (int)self);
+  if (!strstr(buf, mine)) {
+    printf("FAIL: guest said \"%s\", this thread is %s\n", buf, mine);
+    thread_failed = 1;
+  }
+  guest_thread_fini();
+  if (!thread_failed)
+    printf("ok: a host thread reached the guest: %s\n", buf);
+  return 0;
 }
 
 static void *read_gs(long disp) {
@@ -156,6 +190,22 @@ int main(int argc, char **argv) {
     return 9;
   }
   printf("ok: the guest runtime is up: %s\n", buf);
+
+  // node calls a native addon from whatever thread it likes, so a hosted
+  // runtime that only works on the one that loaded it is of little use
+  guest_probe_fn = probe;
+  guest_thread_init = (int (*)(void))sym(h, "cosmo_dylib_thread_init");
+  guest_thread_fini = (void (*)(void))sym(h, "cosmo_dylib_thread_fini");
+  if (!guest_thread_init || !guest_thread_fini) {
+    printf("FAIL: could not find the thread entry points: %s\n", why());
+    return 10;
+  }
+  pthread_t t;
+  pthread_create(&t, 0, thread_main, 0);
+  pthread_join(t, 0);
+  if (thread_failed)
+    return 11;
+
   fini();
 #endif
 
