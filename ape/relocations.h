@@ -120,20 +120,20 @@ ape_export_index = 0
 
 .macro	.export	symbol:req
 #if SupportsWindows()
- .section .sort.rodata.pe.edata.2.1.\symbol,"a",@progbits
+.pushsection .sort.rodata.pe.edata.2.1.\symbol,"a",@progbits
 .Lpe.func.\symbol:
 	.long	RVA(\symbol)
- .previous
- .section .sort.rodata.pe.edata.3.1.\symbol,"a",@progbits
+ .popsection
+.pushsection .sort.rodata.pe.edata.3.1.\symbol,"a",@progbits
 	.long	RVA(.Lpe.name.\symbol)
- .previous
- .section .sort.rodata.pe.edata.4.1.\symbol,"a",@progbits
+ .popsection
+.pushsection .sort.rodata.pe.edata.4.1.\symbol,"a",@progbits
 	.short	ape_export_index
- .previous
- .section .sort.rodata.pe.edata.6.1.\symbol,"a",@progbits
+ .popsection
+.pushsection .sort.rodata.pe.edata.6.1.\symbol,"a",@progbits
 .Lpe.name.\symbol:
 	.asciz	"\symbol"
- .previous
+ .popsection
 #endif /* SupportsWindows() */
 //	The mach-o side wants the same thing shaped differently: an nlist
 //	pointing into a string table by byte offset. That offset isn't
@@ -144,7 +144,7 @@ ape_export_index = 0
 //	thread pointer lives in a register the host is entitled to be using
 //	for its own purposes, so what gets published is a thunk that swaps
 //	it, not the function itself.
- .section .text.ape.export.\symbol,"ax",@progbits
+.pushsection .text.ape.export.\symbol,"ax",@progbits
 	.balign	4
 .Lape.export.\symbol:
 	stp	x29,x30,[sp,#-32]!
@@ -155,22 +155,22 @@ ape_export_index = 0
 	ldr	x28,[sp,#16]
 	ldp	x29,x30,[sp],#32
 	ret
- .previous
+ .popsection
 #define MACHO_EXPORT_ADDRESS(SYMBOL) .Lape.export.\symbol
 #else
 #define MACHO_EXPORT_ADDRESS(SYMBOL) \symbol
 #endif
- .section .macho.linkedit.1.syms.1.\symbol,"a",@progbits
+.pushsection .macho.linkedit.1.syms.1.\symbol,"a",@progbits
 	.long	1 + ape_export_index * MACHO_STRTAB_STRIDE	// n_strx
 	.byte	0x0f			// n_type: N_SECT|N_EXT
 	.byte	1			// n_sect: __text
 	.short	0			// n_desc
 	.quad	MACHO_EXPORT_ADDRESS(\symbol)	// n_value
- .previous
- .section .macho.linkedit.2.strs.1.\symbol,"a",@progbits
+ .popsection
+.pushsection .macho.linkedit.2.strs.1.\symbol,"a",@progbits
 	.asciz	"_\symbol"
 	.org	MACHO_STRTAB_STRIDE,0	// pad this fragment to the stride
- .previous
+ .popsection
  ape_export_index = ape_export_index + 1
 .endm
 
@@ -181,12 +181,12 @@ ape_export_index = 0
 //	The table is walked after the link, so unlike the export directory
 //	these can be written wherever they belong.
 .macro	.import	slot:req symbol:req where=APE_IMPORT_FROM_DYLIB
- .section .macho.imports.1.\symbol,"a",@progbits
+.pushsection .macho.imports.1.\symbol,"a",@progbits
 	.quad	\slot
 	.quad	\where
 	.asciz	"\symbol"
 	.org	APE_MACHO_IMPORT_STRIDE,0
- .previous
+ .popsection
 .endm
 #endif /* __ASSEMBLER__ */
 
