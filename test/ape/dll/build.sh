@@ -62,12 +62,6 @@ CFLAGS="-DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE ${PIC:--fno-pie} \
 $CC $CFLAGS -c -o "$OUT/ape.o" ape/ape.S
 # shellcheck disable=SC2086
 $CC $CFLAGS -c -o "$OUT/exports.o" test/ape/dll/exports.S
-TRACE=
-if [ -n "${INITTRACE:-}" ]; then
-  # shellcheck disable=SC2086
-  $CC $CFLAGS -c -o "$OUT/inittrace.o" test/ape/dll/inittrace.S
-  TRACE="$OUT/inittrace.o"
-fi
 # shellcheck disable=SC2086
 $CC $CFLAGS -std=gnu2x -c -o "$OUT/library.o" test/ape/dll/library.c
 
@@ -90,7 +84,7 @@ $CC -D__LINKER__ -DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE \
 $LD -static -nostdlib -no-pie -z noexecstack -z norelro --gc-sections \
     ${PIC:+--emit-relocs --no-relax} \
     -T "$OUT/ape.lds" -o "$OUT/cosmo_dll_test.dbg" \
-    "$OUT/ape.o" "$OUT/exports.o" "$OUT/library.o" $BOOT $TRACE $LIBC
+    "$OUT/ape.o" "$OUT/exports.o" "$OUT/library.o" $BOOT $LIBC
 
 $OBJCOPY -S -O binary "$OUT/cosmo_dll_test.dbg" "$OUT/cosmo_dll_test.$SUFFIX"
 
