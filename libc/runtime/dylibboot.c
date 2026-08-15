@@ -48,6 +48,7 @@ extern long __tls_disp;
 extern char __tls_guest;
 #endif
 extern long __cosmo_hosted_tls_key;
+int __cosmo_hosted_tid(void);
 extern bool __cosmo_hosted;
 
 void _init(void);
@@ -236,6 +237,12 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   __cosmo_boot_trace("tls", 0);
   __enable_tls();
   __cosmo_boot_trace("tls2", 0);
+
+  // the startup settles for the pid on this platform, since asking for
+  // anything better goes through the loader we don't have
+  int hosted_tid = __cosmo_hosted_tid();
+  if (hosted_tid)
+    atomic_init(&__get_tls_here()->tib_ptid, hosted_tid);
 
   // the constructors, which nothing else is going to run: dyld only runs
   // what LC_ROUTINES or __mod_init_func point at, and this emits

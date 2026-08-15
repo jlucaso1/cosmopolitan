@@ -53,7 +53,10 @@ BIND_OPCODE_DO_BIND = 0x90
 
 # What the library imports, and the word each address lands in. The only
 # thing a guest can't do for itself is get a thread local slot.
-IMPORTS = [("__ape_pthread_key_create", "_pthread_key_create")]
+IMPORTS = [
+    ("__ape_pthread_key_create", "_pthread_key_create"),
+    ("__ape_pthread_threadid_np", "_pthread_threadid_np"),
+]
 
 POINTER_SIZE = 8
 

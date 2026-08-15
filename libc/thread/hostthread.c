@@ -41,6 +41,7 @@
 extern struct CosmoTib *__cosmo_hosted_main_tib;
 
 extern long __cosmo_hosted_tls_key;
+int __cosmo_hosted_tid(void);
 
 #ifdef __x86_64__
 struct CosmoTib *__get_tls_rax(void);
@@ -103,7 +104,9 @@ static int cosmo_hosted_thread_init(void) {
 
   // not gettid(), which answers out of the tib, and the tib installed
   // just now is still the main thread's
-  int tid = sys_gettid();
+  int tid = __cosmo_hosted_tid();
+  if (!tid)
+    tid = sys_gettid();
   atomic_init(&tib->tib_ptid, tid);
   atomic_init(&tib->tib_ctid, tid);
   __set_tls(tib);

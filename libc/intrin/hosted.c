@@ -56,3 +56,25 @@ struct CosmoTib *__cosmo_hosted_main_tib;
  * the slot it names.
  */
 long __cosmo_hosted_tls_key;
+
+/**
+ * Where dyld puts the host's pthread_threadid_np().
+ *
+ * Bound before anything runs; see the bind opcodes in __LINKEDIT.
+ */
+int (*__ape_pthread_threadid_np)(void *, unsigned long long *);
+
+/**
+ * What the host calls this thread.
+ *
+ * Cosmopolitan asks the kernel, which on apple silicon it can't do for
+ * itself: the answer normally comes through the ape loader, and a
+ * library was loaded by something else. Returns zero if there's nobody
+ * to ask, and then the caller settles for what it can get.
+ */
+int __cosmo_hosted_tid(void) {
+  unsigned long long id = 0;
+  if (__ape_pthread_threadid_np && !__ape_pthread_threadid_np(0, &id))
+    return (int)id;
+  return 0;
+}
