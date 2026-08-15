@@ -1023,6 +1023,13 @@ ape_macho:
 //	dlsym() is answered from the export trie, not the symbol table.
 //	Without this a library loads, and nm can even list what it has,
 //	but every lookup against it comes back empty handed.
+//	Room for the rebase opcodes, as real bytes rather than a gap in the
+//	layout, since dyld maps what the segment says is there and a file
+//	that stops short of it is a bus error.
+	.section .macho.rebase,"a",@progbits
+	.space	APE_MACHO_REBASE_SIZE,0
+	.previous
+
 //	dlsym() is answered from the export trie, not the symbol table, and
 //	the rebase opcodes are how dyld learns which words hold addresses,
 //	since it puts a library wherever it likes. Both live in __LINKEDIT.

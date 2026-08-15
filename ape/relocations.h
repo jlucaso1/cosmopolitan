@@ -33,7 +33,7 @@
  * and filled afterwards. Generous: what goes unused stays zero, which is
  * the opcode that says stop.
  */
-#define APE_MACHO_REBASE_SIZE 65536
+#define APE_MACHO_REBASE_SIZE 16384
 
 /**
  * Adjusts virtual address so it's relative to load address.

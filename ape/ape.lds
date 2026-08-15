@@ -396,7 +396,7 @@ SECTIONS {
 	for stop. */
     . = ALIGN(. != 0 ? 8 : 0);
     ape_macho_rebase = .;
-    . += APE_MACHO_REBASE_SIZE;
+    KEEP(*(.macho.rebase))
     ape_macho_rebase_end = .;
 
     ape_linkedit_end = .;

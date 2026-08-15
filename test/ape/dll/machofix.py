@@ -233,7 +233,7 @@ def main(path, debug):
     with open(path, "rb") as f:
         image = bytearray(f.read())
 
-    segments, symtab, dyld_info, _, header_end = parse(image)
+    segments, symtab, dyld_info, dyld_info_at, header_end = parse(image)
     base = segments[0].vmaddr
     rebase_off, rebase_size = dyld_info[0], dyld_info[1]
     trieoff = dyld_info[8]
@@ -248,9 +248,22 @@ def main(path, debug):
             "APE_MACHO_REBASE_SIZE" % (len(opcodes), rebase_size)
         )
     image[rebase_off : rebase_off + len(opcodes)] = opcodes
+
+    # dyld wants the size to be what the opcodes actually take, not the
+    # room they were given, and says so if the stream stops early
+    struct.pack_into("<I", image, dyld_info_at + 4, len(opcodes))
+
+    where = {}
+    for addr in addrs:
+        seg = next(s for s in segments if s.holds(addr))
+        where[seg.name] = where.get(seg.name, 0) + 1
     print(
-        "rebase %d addresses in %d bytes of %d"
-        % (len(addrs), len(opcodes), rebase_size)
+        "rebase %d addresses in %d bytes: %s"
+        % (
+            len(addrs),
+            len(opcodes),
+            ", ".join("%s %d" % kv for kv in sorted(where.items())),
+        )
     )
 
     with open(path, "wb") as f:
