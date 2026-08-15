@@ -118,30 +118,6 @@ static void run_init(int argc, char **argv, char **envp, unsigned long *auxv) {
 #endif
 }
 
-void __cosmo_boot_trace(const char *tag, uintptr_t v) {
-  char buf[28] = "boot ....  0000000000000000\n";
-  for (int i = 0; i < 4 && tag[i]; ++i)
-    buf[5 + i] = tag[i];
-  for (int i = 0; i < 16; ++i)
-    buf[25 - i] = "0123456789abcdef"[(v >> (i * 4)) & 15];
-#ifdef __x86_64__
-  long ax;
-  asm volatile("syscall"
-               : "=a"(ax)
-               : "0"(0x2000004), "D"(2l), "S"(buf), "d"(28l)
-               : "rcx", "r11", "memory", "cc");
-#else
-  register long x16 asm("x16") = 4;
-  register long x0 asm("x0") = 2;
-  register char *x1 asm("x1") = buf;
-  register long x2 asm("x2") = 28;
-  asm volatile("svc\t#0x80"
-               : "+r"(x0)
-               : "r"(x16), "r"(x1), "r"(x2)
-               : "memory", "cc");
-#endif
-}
-
 static unsigned long empty_auxv[2];
 static bool cosmo_dylib_booted;
 static char *cosmo_dylib_argv[2];
@@ -166,7 +142,6 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
     return 1;
   cosmo_dylib_booted = true;
 
-  __cosmo_boot_trace("in", tls_disp);
   cosmo_dylib_hostos = _HOSTXNU;
   __cosmo_hosted = true;
   __tls_enabled_set(false);
@@ -192,9 +167,7 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   // one the way a program's startup does. Raw, because the wrappers
   // dispatch through numbers that one of the fragments below decodes,
   // and __maps_init() wants a pid before then.
-  __cosmo_boot_trace("flag", 0);
   __get_pib()->pid = xnu_getpid();
-  __cosmo_boot_trace("pid", 0);
 
   if (!envp)
     envp = cosmo_dylib_environ;
@@ -221,9 +194,7 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   // decentralized init: system call dispatch, memory map, the lot. it
   // wants argc/argv/envp/auxv in r12 through r15, and a couple of the
   // fragments dereference argv, so give it something valid.
-  __cosmo_boot_trace("pre", 0);
   run_init(argc, argv, envp, auxv);
-  __cosmo_boot_trace("init", 0);
 
   // cosmo.S copies these out of the registers _init takes, and it isn't
   // linked into a library, so a constructor that reads them would find an
@@ -234,9 +205,7 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
 
   // these two live in cosmo.S as well, so the linker never pulls them in
   // and their .init fragments never run
-  __cosmo_boot_trace("tls", 0);
   __enable_tls();
-  __cosmo_boot_trace("tls2", 0);
 
   // the startup settles for the pid on this platform, since asking for
   // anything better goes through the loader we don't have
@@ -248,18 +217,13 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   // what LC_ROUTINES or __mod_init_func point at, and this emits
   // neither, on purpose. malloc's dispatch is one of them, so they go
   // before anything that allocates.
-  __cosmo_boot_trace("cbeg", (uintptr_t)__init_array_start);
-  __cosmo_boot_trace("cend", (uintptr_t)__init_array_end);
   for (init_f **f = __init_array_start; f < __init_array_end; ++f) {
-    __cosmo_boot_trace("ctor", (uintptr_t)*f);
     (*f)(argc, argv, envp, auxv);
   }
 
-  __cosmo_boot_trace("fds", 0);
   if (_weaken(__init_fds))
     _weaken(__init_fds)();
 
-  __cosmo_boot_trace("done", 0);
   __cosmo_hosted_main_tib = __get_tls_here();
   return 1;
 }
@@ -292,7 +256,6 @@ int (*__ape_pthread_key_create)(unsigned *, void (*)(void *));
 
 void COSMO_DYLIB_ROUTINE(int argc, char **argv, char **envp, char **apple,
                          void *vars) {
-  __cosmo_boot_trace("rout", (uintptr_t)__ape_pthread_key_create);
   long disp = 0;
   unsigned key;
   if (__ape_pthread_key_create && !__ape_pthread_key_create(&key, 0))

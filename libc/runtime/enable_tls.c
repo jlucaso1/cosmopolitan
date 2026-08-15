@@ -121,11 +121,9 @@ static unsigned long ParseMask(const char *str) {
  * arch_prctl() function. However, such programs might not be portable
  * and your `errno` variable also won't be thread safe anymore.
  */
-void __cosmo_boot_trace(const char *, unsigned long);
 extern bool __cosmo_hosted;
 
 textstartup void __enable_tls(void) {
-  __cosmo_boot_trace("ent", 0);
 
   // Here's the layout we're currently using:
   //
@@ -191,7 +189,6 @@ textstartup void __enable_tls(void) {
                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   }
 
-  __cosmo_boot_trace("mem", (unsigned long)mem);
   struct CosmoTib *tib =
       (struct CosmoTib *)(mem +
                           ROUNDUP(sizeof(struct CosmoTib), I(_tls_align)) -
@@ -219,7 +216,6 @@ textstartup void __enable_tls(void) {
 #error "unsupported architecture"
 #endif /* __x86_64__ */
 
-  __cosmo_boot_trace("tib", (unsigned long)tib);
   // initialize main thread tls memory
   tib->tib_self = tib;
   tib->tib_self2 = tib;
@@ -284,9 +280,7 @@ textstartup void __enable_tls(void) {
   // ask the operating system to change the x86 segment register
   if (IsWindows())
     __tls_index = TlsAlloc();
-  __cosmo_boot_trace("set", (unsigned long)tib);
   __set_tls(tib);
-  __cosmo_boot_trace("set2", 0);
 
   // we are now allowed to use tls
   __tls_enabled_set(true);

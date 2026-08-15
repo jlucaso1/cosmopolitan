@@ -74,10 +74,7 @@ EXPORTED int cosmo_dll_init(void) {
  * asks the runtime for a system call, some formatting and a little heap.
  * Returns the pid, which the host compares against its own.
  */
-void __cosmo_boot_trace(const char *, unsigned long);
-
 EXPORTED int cosmo_dll_probe(char *out, int size) {
-  __cosmo_boot_trace("prb", (unsigned long)out);
 #if SupportsWindows()
   // there is nothing for a windows host to pass us, so the library
   // brings the runtime up on first use. elsewhere the host has to hand
@@ -85,19 +82,13 @@ EXPORTED int cosmo_dll_probe(char *out, int size) {
   cosmo_dll_boot();
 #endif
   int pid = getpid();
-  __cosmo_boot_trace("pid", pid);
   char *scratch = malloc(128);
-  __cosmo_boot_trace("mal", (unsigned long)scratch);
   if (!scratch)
     return -1;
   int tid = gettid();
-  __cosmo_boot_trace("tid", tid);
   snprintf(scratch, 128, "cosmo libc says pid=%d tid=%d", pid, tid);
-  __cosmo_boot_trace("snp", 0);
   strlcpy(out, scratch, size);
-  __cosmo_boot_trace("cpy", 0);
   free(scratch);
-  __cosmo_boot_trace("fre", 0);
   return pid;
 }
 

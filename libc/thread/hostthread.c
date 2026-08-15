@@ -42,8 +42,6 @@ extern struct CosmoTib *__cosmo_hosted_main_tib;
 
 extern long __cosmo_hosted_tls_key;
 int __cosmo_hosted_tid(void);
-void __cosmo_boot_trace(const char *, unsigned long);
-
 #ifdef __x86_64__
 struct CosmoTib *__get_tls_rax(void);
 #define __get_tls_here() __get_tls_rax()
@@ -86,18 +84,14 @@ static int cosmo_hosted_thread_init(void) {
 
   // _mktls() copies ftrace, strace and the signal mask off the current
   // tib, so it needs a valid one installed; lend it the main thread's
-  __cosmo_boot_trace("lend", (unsigned long)__cosmo_hosted_main_tib);
   __set_tls(__cosmo_hosted_main_tib);
   struct CosmoTib *tib;
-  __cosmo_boot_trace("mk", 0);
   char *tls = _mktls(&tib);
-  __cosmo_boot_trace("mk2", (unsigned long)tls);
   if (!tls) {
     __set_tls(0);
     return -1;
   }
   tib->tib_malloc = tmspace_acquire();
-  __cosmo_boot_trace("heap", (unsigned long)tib->tib_malloc);
 
   // what __enable_tls() gives the main thread, and what anything that
   // suspends or signals a thread goes through
@@ -118,9 +112,7 @@ static int cosmo_hosted_thread_init(void) {
     tid = sys_gettid();
   atomic_init(&tib->tib_ptid, tid);
   atomic_init(&tib->tib_ctid, tid);
-  __cosmo_boot_trace("adop", (unsigned long)tib);
   __set_tls(tib);
-  __cosmo_boot_trace("adp2", 0);
   return 0;
 }
 
@@ -128,7 +120,6 @@ static int cosmo_hosted_thread_init(void) {
  * Hands back what the adoption took.
  */
 static void cosmo_hosted_thread_fini(void) {
-  __cosmo_boot_trace("fini", 0);
   struct CosmoTib *tib = __get_tls_here();
   if (!tib || tib == __cosmo_hosted_main_tib)
     return;
@@ -138,13 +129,9 @@ static void cosmo_hosted_thread_fini(void) {
   void *tls = tib->tib_keys_dynamic;
   void *heap = tib->tib_malloc;
   intptr_t hand = atomic_load_explicit(&tib->tib_syshand, memory_order_relaxed);
-  __cosmo_boot_trace("ftls", (unsigned long)tls);
   free(tls);
-  __cosmo_boot_trace("frel", (unsigned long)heap);
   tmspace_release(heap);
-  __cosmo_boot_trace("fclr", 0);
   __set_tls(0);
-  __cosmo_boot_trace("fdon", 0);
   if (IsWindows() && hand)
     CloseHandle(hand);
 }
