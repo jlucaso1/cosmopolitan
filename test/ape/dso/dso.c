@@ -70,6 +70,18 @@ void cosmo_dso_noop(void) {
 }
 
 void cosmo_dso_init(int, char **, char **, long);
+
+// Says how far the startup got. A raw write, since the runtime it would
+// otherwise go through is the thing being brought up.
+static void say(const char *what) {
+  long ax, len = 0;
+  while (what[len])
+    ++len;
+  asm volatile("syscall"
+               : "=a"(ax)
+               : "0"(1), "D"(2l), "S"(what), "d"(len)
+               : "rcx", "r11", "memory", "cc");
+}
 static bool find_mapping(uintptr_t, uintptr_t *, uintptr_t *);
 
 // initial-exec, so its displacement from the segment base is fixed and
@@ -126,6 +138,7 @@ void cosmo_dso_init(int argc, char **argv, char **envp, long tls_disp) {
   // it comes back EFAULT. Told nothing, it reads whatever is at hand and
   // gets an answer that isn't a stack at all, so this says don't.
   __cosmo_hosted = !envp;
+  say("dso: in\n");
 
   // Some of the fragments below read these, and one of them walks argv,
   // so a host that had nothing to say still has to be given something
@@ -160,6 +173,7 @@ void cosmo_dso_init(int argc, char **argv, char **envp, long tls_disp) {
   __envp = envp;
   __oldstack = (intptr_t)__builtin_frame_address(0);
 
+  say("dso: pre-init\n");
   register long r12 asm("r12") = argc;
   register char **r13 asm("r13") = argv;
   register char **r14 asm("r14") = envp;
@@ -173,8 +187,11 @@ void cosmo_dso_init(int argc, char **argv, char **envp, long tls_disp) {
   // these two live in cosmo.S, which nothing references in a shared
   // object, so the linker never pulls it in and its .init fragments
   // never run
+  say("dso: init done\n");
   __enable_tls();
+  say("dso: tls\n");
   __init_fds();
+  say("dso: fds\n");
   main_tib = __get_tls();
 
   // and now the constructors the linker script held back
@@ -185,11 +202,13 @@ void cosmo_dso_init(int argc, char **argv, char **envp, long tls_disp) {
   // thread's stack is outright, the same way an adopted thread does.
   // Nothing else knows, and a read() into a buffer on it needs someone
   // to have said.
+  say("dso: ctors\n");
   if (__cosmo_hosted) {
     uintptr_t lo, hi;
     if (find_mapping((uintptr_t)__builtin_frame_address(0), &lo, &hi))
       __maps_track((char *)lo, hi - lo, PROT_READ | PROT_WRITE, MAP_NOFORK);
   }
+  say("dso: done\n");
 }
 
 /**
