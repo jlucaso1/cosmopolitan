@@ -74,9 +74,15 @@ $CC -D__LINKER__ -DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE \
     -o "$OUT/ape.lds" ape/ape.lds
 
 # --emit-relocs keeps the records of every absolute address the linker
-# resolved, which is what the mach-o rebase information is built from
+# resolved, which is what the mach-o rebase information is built from.
+#
+# --no-relax stops it from turning a reference through the global offset
+# table into an absolute immediate, which it is entitled to do in a
+# static link at a fixed address, and which nothing can relocate
+# afterwards: an address inside an instruction is not a word dyld can
+# slide. Kept in the table, it is.
 $LD -static -nostdlib -no-pie -z noexecstack -z norelro --gc-sections \
-    ${PIC:+--emit-relocs} \
+    ${PIC:+--emit-relocs --no-relax} \
     -T "$OUT/ape.lds" -o "$OUT/cosmo_dll_test.dbg" \
     "$OUT/ape.o" "$OUT/exports.o" "$OUT/library.o" $BOOT $LIBC
 
