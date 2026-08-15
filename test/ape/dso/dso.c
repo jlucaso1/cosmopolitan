@@ -68,6 +68,8 @@ static struct CosmoTib *main_tib;
 void cosmo_dso_noop(void) {
 }
 
+void cosmo_dso_init(int, char **, char **, long);
+
 // initial-exec, so its displacement from the segment base is fixed and
 // the same for every thread, which is what makes it usable as the slot
 static __thread void *cosmo_dso_tib __attribute__((tls_model("initial-exec")));
