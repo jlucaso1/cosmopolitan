@@ -181,6 +181,23 @@ static void publish(napi_env env, napi_value exports, const char *name,
   napi_set_named_property_(env, exports, name, value);
 }
 
+#ifndef NDEBUG
+// Says how far registration got, for when it doesn't get all the way.
+// A raw write, since the runtime it would otherwise go through is the
+// thing being brought up.
+static void say(const char *what) {
+#ifdef __x86_64__
+  long ax;
+  asm volatile("syscall"
+               : "=a"(ax)
+               : "0"(1), "D"(2l), "S"(what), "d"((long)__builtin_strlen(what))
+               : "rcx", "r11", "memory", "cc");
+#endif
+}
+#else
+#define say(x) (void)0
+#endif
+
 /**
  * What node calls once it has opened the file.
  */
@@ -206,7 +223,9 @@ EXPORTED napi_value napi_register_module_v1(napi_env env, napi_value exports) {
 #elif !SupportsXnu()
   // here the runtime comes up on this line rather than when the file was
   // opened, since opening it happens under the loader's own lock
+  say("addon: booting\n");
   cosmo_dso_boot();
+  say("addon: booted\n");
 #define BIND(f) f##_ = f
   BIND(napi_create_int32);
   BIND(napi_create_string_utf8);
@@ -218,7 +237,9 @@ EXPORTED napi_value napi_register_module_v1(napi_env env, napi_value exports) {
 #endif
   if (!napi_create_function_ || !napi_set_named_property_)
     return exports;
+  say("addon: publishing\n");
   publish(env, exports, "add", Add);
   publish(env, exports, "probe", Probe);
+  say("addon: published\n");
   return exports;
 }
