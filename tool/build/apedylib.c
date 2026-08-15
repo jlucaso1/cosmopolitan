@@ -391,7 +391,7 @@ static uint64_t elf_symbol(const char *want) {
  * holds the ones it made itself, which no record mentions.
  */
 static void collect_rebases(void) {
-  bool is_arm = elf_header->e_machine == EM_AARCH64;
+  int is_arm = elf_header->e_machine == EM_AARCH64;
   for (int i = 0; i < elf_header->e_shnum; ++i) {
     Elf64_Shdr *sh = elf_section(i);
     if (sh->sh_type != SHT_RELA)

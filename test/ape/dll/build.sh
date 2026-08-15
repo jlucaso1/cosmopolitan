@@ -118,8 +118,11 @@ $OBJCOPY -S -O binary "$OUT/cosmo_dll_test.dbg" "$OUT/cosmo_dll_test.$SUFFIX"
 # the export trie, the rebase opcodes and the binds all hold what the
 # link only just decided, in encodings no relocation can carry
 if [ "$SUFFIX" = dylib ]; then
-  APEDYLIB=${APEDYLIB:-o//tool/build/apedylib}
-  [ -x "$APEDYLIB" ] || make -j"$(nproc)" MODE= "$APEDYLIB"
+  # built with the toolchain rather than through the build, so that it
+  # doesn't share an output tree with a libc compiled for a library
+  APEDYLIB=${APEDYLIB:-$OUT/apedylib}
+  [ -x "$APEDYLIB" ] ||
+    "$COSMOCC/bin/cosmocc" -I. -O2 -o "$APEDYLIB" tool/build/apedylib.c
   "$APEDYLIB" "$OUT/cosmo_dll_test.$SUFFIX" "$OUT/cosmo_dll_test.dbg"
 fi
 
