@@ -40,11 +40,23 @@
 
 extern struct CosmoTib *__cosmo_hosted_main_tib;
 
+extern long __cosmo_hosted_tls_key;
+
 #ifdef __x86_64__
 struct CosmoTib *__get_tls_rax(void);
 #define __get_tls_here() __get_tls_rax()
 #else
-#define __get_tls_here() __get_tls()
+// x28 always holds something, since a thunk fills it in on the way in
+// with the block the startup used if the slot is empty, so what says
+// whether this thread has a tib of its own is the slot itself
+static struct CosmoTib *__get_tls_here(void) {
+  if (!__cosmo_hosted_tls_key)
+    return 0;
+  char *base;
+  asm("mrs\t%0,tpidrro_el0" : "=r"(base));
+  return ((struct CosmoTib **)((unsigned long)base &
+                               ~7ul))[__cosmo_hosted_tls_key];
+}
 #endif
 
 /**
