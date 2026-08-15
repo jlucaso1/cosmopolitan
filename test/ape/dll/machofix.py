@@ -43,6 +43,18 @@ REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB = 0x20
 REBASE_OPCODE_ADD_ADDR_ULEB = 0x30
 REBASE_OPCODE_DO_REBASE_ULEB_TIMES = 0x60
 
+BIND_TYPE_POINTER = 1
+BIND_OPCODE_DONE = 0x00
+BIND_OPCODE_SET_DYLIB_ORDINAL_IMM = 0x10
+BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM = 0x40
+BIND_OPCODE_SET_TYPE_IMM = 0x50
+BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB = 0x70
+BIND_OPCODE_DO_BIND = 0x90
+
+# What the library imports, and the word each address lands in. The only
+# thing a guest can't do for itself is get a thread local slot.
+IMPORTS = [("__ape_pthread_key_create", "_pthread_key_create")]
+
 POINTER_SIZE = 8
 
 
@@ -261,6 +273,45 @@ def global_offset_table(debug, image, segments):
     return found
 
 
+def elf_symbols(debug):
+    out = subprocess.run(
+        ["nm", debug],
+        check=True,
+        capture_output=True,
+        env=dict(os.environ, LC_ALL="C"),
+    ).stdout.decode(errors="replace")
+    found = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) == 3:
+            found[parts[2]] = int(parts[0], 16)
+    return found
+
+
+def bind_opcodes(symbols, segments):
+    """Says which words dyld should fill in from somewhere else.
+
+    One dylib is loaded and one symbol comes out of it, so this doesn't
+    bother with the encoding's ways of saying the same thing shorter.
+    """
+    out = bytearray()
+    out.append(BIND_OPCODE_SET_DYLIB_ORDINAL_IMM | 1)  # the first LC_LOAD_DYLIB
+    out.append(BIND_OPCODE_SET_TYPE_IMM | BIND_TYPE_POINTER)
+    for slot, name in IMPORTS:
+        if slot not in symbols:
+            raise ValueError("%s isn't in the image to bind into" % slot)
+        at = symbols[slot]
+        seg = next(s for s in segments if s.holds(at))
+        out.append(BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM)
+        out += name.encode() + b"\0"
+        out.append(BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB | seg.index)
+        out += uleb(at - seg.vmaddr)
+        out.append(BIND_OPCODE_DO_BIND)
+        print("bind %s into %s+%#x" % (name, seg.name, at - seg.vmaddr))
+    out.append(BIND_OPCODE_DONE)
+    return bytes(out)
+
+
 def rebase_opcodes(addrs, segments):
     out = bytearray()
     out.append(REBASE_OPCODE_SET_TYPE_IMM | REBASE_TYPE_POINTER)
@@ -297,9 +348,19 @@ def main(path, debug):
     segments, symtab, dyld_info, dyld_info_at, text_begins = parse(image)
     base = segments[0].vmaddr
     rebase_off, rebase_size = dyld_info[0], dyld_info[1]
+    bind_off, bind_size = dyld_info[2], dyld_info[3]
     trieoff = dyld_info[8]
 
     fill_export_addresses(image, trieoff, base, symbol_addresses(image, symtab))
+
+    binds = bind_opcodes(elf_symbols(debug), segments)
+    if len(binds) > bind_size:
+        raise ValueError(
+            "bind opcodes need %d bytes and only %d were set aside; raise "
+            "APE_MACHO_BIND_SIZE" % (len(binds), bind_size)
+        )
+    image[bind_off : bind_off + len(binds)] = binds
+    struct.pack_into("<I", image, dyld_info_at + 12, len(binds))
 
     addrs = absolute_words(debug, segments, text_begins)
     got = global_offset_table(debug, image, segments)

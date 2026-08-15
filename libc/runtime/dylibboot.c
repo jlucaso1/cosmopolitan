@@ -169,6 +169,33 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
 }
 
 /**
+ * Where dyld puts the host's pthread_key_create().
+ *
+ * Bound before anything in the library runs; see the bind opcodes in
+ * __LINKEDIT. This is the one thing a guest can't do for itself: a
+ * thread local slot has to come from whoever is already handing them
+ * out, or two runtimes end up writing to the same place.
+ */
+int (*__ape_pthread_key_create)(unsigned *, void (*)(void *));
+
+/**
+ * Brings the runtime up as soon as the library is loaded.
+ *
+ * What dyld calls for LC_ROUTINES, with what it would pass an
+ * initializer. A host that only knows how to open a library gets one
+ * that works; a host with opinions about the thread local slot can call
+ * cosmo_dylib_boot() itself first, and this finds nothing left to do.
+ */
+void cosmo_dylib_routine(int argc, char **argv, char **envp, char **apple,
+                         void *vars) {
+  long disp = 0;
+  unsigned key;
+  if (__ape_pthread_key_create && !__ape_pthread_key_create(&key, 0))
+    disp = (long)key * sizeof(void *);
+  cosmo_dylib_boot(argc, argv, envp, disp);
+}
+
+/**
  * Shuts the runtime down without shutting the process down.
  *
  * exit() ends the process, which for a hosted module means taking the

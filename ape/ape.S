@@ -887,7 +887,7 @@ ape_macho:
 	.long	MAC_CPU_NEXGEN32E_ALL
 #ifdef APE_DLL
 	.long	MAC_DYLIB
-	.long	9				// number of load commands
+	.long	11				// number of load commands
 	.long	90f-20f				// size of all load commands
 	.long	MAC_NOUNDEFS|MAC_DYLDLINK	// flags
 #else
@@ -1015,6 +1015,25 @@ ape_macho:
 	.long	0x10000				// current version 1.0.0
 	.long	0x10000				// compatibility version
 	.ascin	"@rpath/cosmo.dylib",24
+//	What the library imports, and where from. A guest needs a thread
+//	local slot of its own, and the only thing that can hand one out is
+//	the host's own pthread implementation.
+70:	.long	MAC_LC_LOAD_DYLIB
+	.long	75f-70b				// cmdsize
+	.long	24				// name offset into this command
+	.long	0				// timestamp
+	.long	0x10000				// current version
+	.long	0x10000				// compatibility version
+	.ascin	"/usr/lib/libSystem.B.dylib",32
+//	Called by dyld once the library is mapped and bound, which is the
+//	only moment a library can count on before the host starts using
+//	it. The startup runs there, so a host that only knows how to open
+//	a library gets one that works.
+75:	.long	MAC_LC_ROUTINES_64
+	.long	80f-75b				// cmdsize
+	.stub	ape_macho_routine,quad		// init_address
+	.quad	0				// init_module
+	.quad	0,0,0,0,0,0			// reserved
 80:	.long	MAC_LC_SYMTAB
 	.long	85f-80b				// cmdsize
 	.stub	ape_macho_symoff,long
@@ -1047,6 +1066,9 @@ ape_macho:
 	.pushsection .macho.rebase,"a",@progbits
 	.space	APE_MACHO_REBASE_SIZE,0
 	.popsection
+	.pushsection .macho.bind,"a",@progbits
+	.space	APE_MACHO_BIND_SIZE,0
+	.popsection
 
 //	dlsym() is answered from the export trie, not the symbol table, and
 //	the rebase opcodes are how dyld learns which words hold addresses,
@@ -1055,7 +1077,8 @@ ape_macho:
 	.long	90f-86b				// cmdsize
 	.stub	ape_macho_rebaseoff,long
 	.stub	ape_macho_rebasesize,long
-	.long	0,0				// bind
+	.stub	ape_macho_bindoff,long
+	.stub	ape_macho_bindsize,long
 	.long	0,0				// weak bind
 	.long	0,0				// lazy bind
 	.stub	ape_macho_trieoff,long
@@ -2101,12 +2124,28 @@ PERFORMANCE OF THIS SOFTWARE."
 //
 //	The New Technology calls this with the reason in %edx under the
 //	Microsoft convention, and a library that refuses to load returns
-//	zero. Returning one here means the runtime is not up yet: the
-//	host is expected to call into us for that, the way a .node addon
-//	does from napi_register_module_v1.
+//	zero.
+//
+//	Attaching to a process is where the runtime comes up, so that a
+//	host which only knows how to load a library gets one that works.
+//	This runs under the loader lock, which rules out starting threads
+//	and loading further libraries; the startup does neither when it
+//	knows it is a guest.
+//
+//	The reference is weak because a library is free to leave the
+//	startup out and bring itself up whenever it likes.
 	.text
+	.weak	cosmo_dll_boot
 ape_dll_main:
-	mov	$1,%eax
+	cmp	$1,%edx			// DLL_PROCESS_ATTACH
+	jne	1f
+	mov	$cosmo_dll_boot,%eax
+	test	%eax,%eax
+	jz	1f
+	sub	$40,%rsp		// shadow space, and realigns
+	call	*%rax
+	add	$40,%rsp
+1:	mov	$1,%eax
 	ret
 	.endfn	ape_dll_main,globl
 

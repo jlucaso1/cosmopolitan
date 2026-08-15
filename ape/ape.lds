@@ -398,6 +398,9 @@ SECTIONS {
     ape_macho_rebase = .;
     KEEP(*(.macho.rebase))
     ape_macho_rebase_end = .;
+    ape_macho_bind = .;
+    KEEP(*(.macho.bind))
+    ape_macho_bind_end = .;
 
     ape_linkedit_end = .;
 #endif /* APE_DLL */
@@ -866,6 +869,9 @@ PFSTUB4(ape_macho_stroff, RVA(ape_macho_strs));
 PFSTUB4(ape_macho_strsize, ape_macho_strs_end - ape_macho_strs);
 PFSTUB8(ape_macho_bss_vaddr, ADDR(.bss));
 PFSTUB8(ape_macho_bss_size, _end - ADDR(.bss));
+PFSTUB4(ape_macho_bindoff, RVA(ape_macho_bind));
+PFSTUB4(ape_macho_bindsize, APE_MACHO_BIND_SIZE);
+PFSTUB8(ape_macho_routine, cosmo_dylib_routine);
 PFSTUB4(ape_macho_rebaseoff, RVA(ape_macho_rebase));
 PFSTUB4(ape_macho_rebasesize, APE_MACHO_REBASE_SIZE);
 PFSTUB4(ape_macho_trieoff, RVA(ape_macho_trie));

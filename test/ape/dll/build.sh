@@ -82,7 +82,7 @@ $CC -D__LINKER__ -DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE \
 # afterwards: an address inside an instruction is not a word dyld can
 # slide. Kept in the table, it is.
 $LD -static -nostdlib -no-pie -z noexecstack -z norelro --gc-sections \
-    ${PIC:+--emit-relocs --no-relax} \
+    ${PIC:+--emit-relocs --no-relax --undefined=cosmo_dylib_routine} \
     -T "$OUT/ape.lds" -o "$OUT/cosmo_dll_test.dbg" \
     "$OUT/ape.o" "$OUT/exports.o" "$OUT/library.o" $BOOT $LIBC
 

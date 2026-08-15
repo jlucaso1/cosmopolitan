@@ -163,19 +163,15 @@ int main(int argc, char **argv) {
   pthread_setspecific(key, 0);
   printf("ok: the guest can keep its tib at %%gs%+ld\n", disp);
 
-  int (*boot)(int, char **, char **, long) =
-      (int (*)(int, char **, char **, long))sym(h, "cosmo_dylib_boot");
+  // Nothing here starts the runtime. dyld ran it when the library was
+  // loaded, before this program got control back, so what follows is
+  // asking a library that was only opened to do work.
   int (*probe)(char *, int) = (int (*)(char *, int))sym(h, "cosmo_dll_probe");
   void (*fini)(void) = (void (*)(void))sym(h, "cosmo_dylib_fini");
-  if (!boot || !probe || !fini) {
+  if (!probe || !fini) {
     printf("FAIL: could not find the runtime entry points: %s\n", why());
     return 6;
   }
-  if (!boot(argc, argv, environ, disp)) {
-    printf("FAIL: the runtime would not start\n");
-    return 7;
-  }
-  printf("ok: the runtime booted\n");
 
   char buf[128] = "";
   int pid = probe(buf, sizeof(buf));

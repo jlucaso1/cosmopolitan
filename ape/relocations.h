@@ -36,6 +36,14 @@
 #define APE_MACHO_REBASE_SIZE 16384
 
 /**
+ * How much of __LINKEDIT is set aside for mach-o bind opcodes.
+ *
+ * These say which words dyld should fill with addresses from somewhere
+ * else, which is the only way a library can reach its host.
+ */
+#define APE_MACHO_BIND_SIZE 512
+
+/**
  * Adjusts virtual address so it's relative to load address.
  */
 #define PHYSICAL(x) ((x) - (IMAGE_BASE_VIRTUAL - IMAGE_BASE_PHYSICAL))
