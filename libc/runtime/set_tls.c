@@ -32,6 +32,7 @@ int sys_set_tls(uintptr_t, void *);
 
 extern long __tls_disp;
 extern char __tls_guest;
+extern long __cosmo_hosted_tls_key;
 
 // we can't allow --ftrace here because cosmo_dlopen() calls this
 // function to fix the tls register, and ftrace needs it unbroken
@@ -78,6 +79,16 @@ dontinstrument textstartup void __set_tls(struct CosmoTib *tib) {
                    "d"((uint32_t)(val >> 32)));
   }
 #elif defined(__aarch64__)
+  // The register is ours only while our code is running: a host is
+  // entitled to keep its own things in x28 and find them there when we
+  // return. So the thunk at each entry point loads it back out of the
+  // slot the host gave us, and this is what puts it there.
+  if (__cosmo_hosted_tls_key) {
+    char *base;
+    asm("mrs\t%0,tpidrro_el0" : "=r"(base));
+    ((void **)((unsigned long)base & ~7ul))[__cosmo_hosted_tls_key] =
+        (void *)tib;
+  }
   register long x28 asm("x28") = (long)tib;
   asm volatile("" : "+r"(x28));
 #else
