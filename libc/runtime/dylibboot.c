@@ -244,6 +244,7 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   __cosmo_boot_trace("cbeg", (uintptr_t)__init_array_start);
   __cosmo_boot_trace("cend", (uintptr_t)__init_array_end);
   for (init_f **f = __init_array_start; f < __init_array_end; ++f) {
+    __cosmo_boot_trace("ctor", (uintptr_t)*f);
     (*f)(argc, argv, envp, auxv);
   }
 
