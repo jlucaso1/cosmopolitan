@@ -26,8 +26,12 @@
 //	data in lockstep with the code, and %r12 through %r15 carry what
 //	the startup was handed.
 
-	.macro	.initmark number:req
-	.init.start \number,_init_mark\number
+	.macro	.initmark number:req name:req text:req
+	.section .rodata.str1.1,"aMS",@progbits,1
+1:	.ascii	"\text\n"
+2:
+	.previous
+	.init.start \number,_init_\name
 	push	%rax
 	push	%rcx
 	push	%rdx
@@ -37,10 +41,10 @@
 	push	%r9
 	push	%r10
 	push	%r11
-	lea	.Lmark\number(%rip),%rsi
+	lea	1b(%rip),%rsi
 	mov	$0x2000004,%eax			// xnu write
 	mov	$2,%edi
-	mov	$9,%edx
+	mov	$(2b-1b),%edx
 	syscall
 	pop	%r11
 	pop	%r10
@@ -51,23 +55,19 @@
 	pop	%rdx
 	pop	%rcx
 	pop	%rax
-	.init.end \number,_init_mark\number
-	.section .rodata.str1.1,"aMS",@progbits,1
-.Lmark\number:
-	.ascii	"init \number\n"
-	.previous
+	.init.end \number,_init_\name
 	.endm
 
-	.initmark 100
-	.initmark 200
-	.initmark 300
-	.initmark 301
-	.initmark 302
-	.initmark 303
-	.initmark 304
-	.initmark 305
-	.initmark 400
-	.initmark 500
-	.initmark 600
-	.initmark 700
-	.initmark 800
+	.initmark 100,aa_mark_100,"init 100"
+	.initmark 200,aa_mark_200,"init 200"
+	.initmark 300,aa_mark_300,"init 300 begins"
+	.initmark 300,p0mark,"init 300 argv and environ done"
+	.initmark 300,q_mark,"init 300 progname done"
+	.initmark 300,t_mark,"init 300 systemfive done"
+	.initmark 301,aa_mark_301,"init 301 begins"
+	.initmark 301,z_mark_301,"init 301 maps and nocolor done"
+	.initmark 302,aa_mark_302,"init 302"
+	.initmark 305,aa_mark_305,"init 305"
+	.initmark 400,aa_mark_400,"init 400"
+	.initmark 500,aa_mark_500,"init 500"
+	.initmark 700,aa_mark_700,"init 700"
