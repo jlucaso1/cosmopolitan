@@ -538,11 +538,13 @@ SECTIONS {
   . = ALIGN(. != 0 ? CONSTANT(COMMONPAGESIZE) : 0);
   ape_linkedit_start = .;
   KEEP(*(SORT_BY_NAME(.macho.linkedit.*)))
+  . = ALIGN(. != 0 ? 8 : 0);
 
   /*	The root of the export trie: no value of its own, and one child
 	per export. Counting them is the linker's job, so the node is
 	built here rather than in the .export directive that lays out
 	everything below it. */
+  . = ALIGN(. != 0 ? 8 : 0);
   ape_macho_trie = .;
   BYTE(0);
   BYTE((ape_macho_syms_end - ape_macho_syms) / 16);

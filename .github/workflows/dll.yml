@@ -182,6 +182,9 @@ jobs:
           codesign -s - --force cosmo_dll_test.dylib
           codesign -dv cosmo_dll_test.dylib 2>&1 | head -5 || true
           dyld_info -exports cosmo_dll_test.dylib || true
+          otool -l cosmo_dll_test.dylib | grep -A6 -E "cmd LC_SEGMENT_64|LC_CODE_SIGNATURE" |
+            grep -E "segname|fileoff|filesize|vmaddr|vmsize|dataoff|datasize" || true
+          ls -l cosmo_dll_test.dylib
           clang -o host test/ape/dll/host.c
           ./host
 
