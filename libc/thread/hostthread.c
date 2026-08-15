@@ -42,6 +42,7 @@ extern struct CosmoTib *__cosmo_hosted_main_tib;
 
 extern long __cosmo_hosted_tls_key;
 int __cosmo_hosted_tid(void);
+void __cosmo_boot_trace(const char *, unsigned long);
 
 #ifdef __x86_64__
 struct CosmoTib *__get_tls_rax(void);
@@ -81,14 +82,18 @@ static int cosmo_hosted_thread_init(void) {
 
   // _mktls() copies ftrace, strace and the signal mask off the current
   // tib, so it needs a valid one installed; lend it the main thread's
+  __cosmo_boot_trace("lend", (unsigned long)__cosmo_hosted_main_tib);
   __set_tls(__cosmo_hosted_main_tib);
   struct CosmoTib *tib;
+  __cosmo_boot_trace("mk", 0);
   char *tls = _mktls(&tib);
+  __cosmo_boot_trace("mk2", (unsigned long)tls);
   if (!tls) {
     __set_tls(0);
     return -1;
   }
   tib->tib_malloc = tmspace_acquire();
+  __cosmo_boot_trace("heap", (unsigned long)tib->tib_malloc);
 
   // what __enable_tls() gives the main thread, and what anything that
   // suspends or signals a thread goes through
@@ -109,7 +114,9 @@ static int cosmo_hosted_thread_init(void) {
     tid = sys_gettid();
   atomic_init(&tib->tib_ptid, tid);
   atomic_init(&tib->tib_ctid, tid);
+  __cosmo_boot_trace("adop", (unsigned long)tib);
   __set_tls(tib);
+  __cosmo_boot_trace("adp2", 0);
   return 0;
 }
 
