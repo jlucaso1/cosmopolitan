@@ -122,12 +122,32 @@ def parse(image):
         pos += cmdsize
     if symtab is None or dyld_info is None or not segments:
         raise ValueError("missing segments, symtab, or dyld info")
-    return segments, symtab, dyld_info, dyld_info_at, 32 + struct.unpack_from(
-        "<I", image, 20
-    )[0]
+    return segments, symtab, dyld_info, dyld_info_at, text_start(image)
 
 
-def symbol_addresses(image, symtab):
+def text_start(image):
+    """Where the code begins, which is where the headers stop.
+
+    Everything below it describes the image rather than runs: the mach-o
+    header and its load commands, and the elf and pe headers that share
+    those first bytes. dyld reads its own before it slides anything and
+    expects the addresses in them to be the ones the linker wrote, and
+    the others are not its business at all.
+    """
+    ncmds = struct.unpack_from("<I", image, 16)[0]
+    pos = 32
+    for _ in range(ncmds):
+        cmd, cmdsize = struct.unpack_from("<2I", image, pos)
+        if cmd == LC_SEGMENT_64:
+            nsects = struct.unpack_from("<I", image, pos + 64)[0]
+            at = pos + 72
+            for _ in range(nsects):
+                name = image[at : at + 16].rstrip(b"\0").decode()
+                if name == "__text":
+                    return struct.unpack_from("<Q", image, at + 32)[0]
+                at += 80
+        pos += cmdsize
+    raise ValueError("no __text section record to bound the headers with")
     symoff, nsyms, stroff, _ = symtab
     addresses = {}
     for i in range(nsyms):
@@ -157,7 +177,7 @@ def fill_export_addresses(image, trieoff, base, addresses):
         print("export %s at %#x" % (name, addresses[name] - base))
 
 
-def absolute_words(debug, segments, header_end):
+def absolute_words(debug, segments, text_begins):
     """Every word the linker resolved to an address inside the image.
 
     The relocation records say where they are. What has to be left out is
@@ -188,8 +208,8 @@ def absolute_words(debug, segments, header_end):
         if addr % POINTER_SIZE:
             skipped += 1  # dyld can only rebase aligned words
             continue
-        if addr < header_end:
-            continue  # the header describes the image
+        if addr < text_begins:
+            continue  # the headers describe the image, they don't run
         if linkedit and linkedit.holds(addr):
             continue  # so does __LINKEDIT
         if not any(s.holds(addr) for s in segments):
@@ -233,14 +253,15 @@ def main(path, debug):
     with open(path, "rb") as f:
         image = bytearray(f.read())
 
-    segments, symtab, dyld_info, dyld_info_at, header_end = parse(image)
+    segments, symtab, dyld_info, dyld_info_at, text_begins = parse(image)
     base = segments[0].vmaddr
     rebase_off, rebase_size = dyld_info[0], dyld_info[1]
     trieoff = dyld_info[8]
 
     fill_export_addresses(image, trieoff, base, symbol_addresses(image, symtab))
 
-    addrs = absolute_words(debug, segments, header_end)
+    addrs = absolute_words(debug, segments, text_begins)
+    print("headers end at %#x" % text_begins)
     opcodes = rebase_opcodes(addrs, segments)
     if len(opcodes) > rebase_size:
         raise ValueError(
