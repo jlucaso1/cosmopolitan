@@ -74,6 +74,21 @@ void cosmo_dso_init(int, char **, char **, long);
 
 // Says how far the startup got. A raw write, since the runtime it would
 // otherwise go through is the thing being brought up.
+void __cosmo_boot_trace(const char *what, unsigned long v) {
+  char buf[32] = "                    \n";
+  int i = 0;
+  while (what[i] && i < 12)
+    buf[i] = what[i], ++i;
+  for (int j = 0; j < 16; ++j)
+    buf[29 - j] = "0123456789abcdef"[(v >> (j * 4)) & 15];
+  buf[30] = '\n';
+  long ax;
+  asm volatile("syscall"
+               : "=a"(ax)
+               : "0"(1), "D"(2l), "S"(buf), "d"(31l)
+               : "rcx", "r11", "memory", "cc");
+}
+
 static void say(const char *what) {
   long ax, len = 0;
   while (what[len])

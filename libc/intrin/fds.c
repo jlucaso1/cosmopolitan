@@ -88,7 +88,16 @@ static void fdtrace(int n, uintptr_t v) {
   WriteFile(GetStdHandle(kNtStdErrorHandle), buf, 28, &wrote, 0);
 }
 
+// a library bringing this up inside somebody else's process can say so
+void __cosmo_boot_trace(const char *, unsigned long) __attribute__((weak));
+#define TRACE(s, v)              \
+  do {                           \
+    if (__cosmo_boot_trace)      \
+      __cosmo_boot_trace(s, v);  \
+  } while (0)
+
 textstartup void __init_fds(void) {
+  TRACE("fds in", 0);
   if (IsWindows())
     fdtrace(0, 0);
 
@@ -102,6 +111,7 @@ textstartup void __init_fds(void) {
     _Exit(97);
   if (IsWindows())
     fdtrace(1, (uintptr_t)fds->p);
+  TRACE("fds map", (unsigned long)fds->p);
   fds->c = fds_map_size;
   fds->n = 3;
 
@@ -128,6 +138,7 @@ textstartup void __init_fds(void) {
   }
   if (IsWindows())
     fdtrace(2, 0);
+  TRACE("fds std", 0);
   fds->p[0].flags = O_RDONLY;
   fds->p[1].flags = O_WRONLY;
   fds->p[2].flags = O_WRONLY;
