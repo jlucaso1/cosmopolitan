@@ -23,10 +23,11 @@
 //	Which is the point of it: the mach-o tables are built after the
 //	link, out of what the linker sorted, so nothing has to be able to
 //	see everything at once. The export directory windows reads still
-//	does, since its ordinals come from a counter the assembler keeps,
-//	so this half is only for the other platform.
+//	does, since its ordinals come from a counter the assembler keeps
+//	and a counter can only count what one file holds, so this half sits
+//	out that build.
 
-#if SupportsXnu()
+#if !SupportsWindows()
 
 //	Reaching the program that opened us, which is what a plugin is
 //	for. Flat, meaning look through everything already loaded rather
@@ -36,4 +37,4 @@
 
 	.export	cosmo_dll_callhost
 
-#endif /* SupportsXnu() */
+#endif /* !SupportsWindows() */
