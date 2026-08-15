@@ -351,6 +351,8 @@ void __maps_unmark(void *addr, size_t size) {
   }
 }
 
+extern bool __cosmo_hosted;
+
 textstartup void __maps_init(void) {
   if (__maps.once)
     return;
@@ -371,7 +373,12 @@ textstartup void __maps_init(void) {
   __maps_lock();
 
   // record _start() stack mapping
-  if (!IsWindows()) {
+  //
+  // Not ours to record when we're a library: the stack belongs to the
+  // host, which is under no obligation to have laid it out the way a
+  // program's startup would, and finding its bounds means reading from
+  // wherever the environment happens to live.
+  if (!IsWindows() && !__cosmo_hosted) {
 
     // linux v4.12+ reserves 1mb of guard space beneath rlimit_stack
     // https://lwn.net/Articles/725832/. if we guess too small, then
