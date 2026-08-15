@@ -148,6 +148,9 @@ def text_start(image):
                 at += 80
         pos += cmdsize
     raise ValueError("no __text section record to bound the headers with")
+
+
+def symbol_addresses(image, symtab):
     symoff, nsyms, stroff, _ = symtab
     addresses = {}
     for i in range(nsyms):
