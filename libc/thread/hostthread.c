@@ -124,6 +124,7 @@ static int cosmo_hosted_thread_init(void) {
  * Hands back what the adoption took.
  */
 static void cosmo_hosted_thread_fini(void) {
+  __cosmo_boot_trace("fini", 0);
   struct CosmoTib *tib = __get_tls_here();
   if (!tib || tib == __cosmo_hosted_main_tib)
     return;
@@ -133,9 +134,13 @@ static void cosmo_hosted_thread_fini(void) {
   void *tls = tib->tib_keys_dynamic;
   void *heap = tib->tib_malloc;
   intptr_t hand = atomic_load_explicit(&tib->tib_syshand, memory_order_relaxed);
+  __cosmo_boot_trace("ftls", (unsigned long)tls);
   free(tls);
+  __cosmo_boot_trace("frel", (unsigned long)heap);
   tmspace_release(heap);
+  __cosmo_boot_trace("fclr", 0);
   __set_tls(0);
+  __cosmo_boot_trace("fdon", 0);
   if (IsWindows() && hand)
     CloseHandle(hand);
 }

@@ -97,6 +97,7 @@ EXPORTED int cosmo_dll_probe(char *out, int size) {
   strlcpy(out, scratch, size);
   __cosmo_boot_trace("cpy", 0);
   free(scratch);
+  __cosmo_boot_trace("fre", 0);
   return pid;
 }
 
