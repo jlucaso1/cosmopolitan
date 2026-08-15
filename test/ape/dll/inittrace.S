@@ -61,6 +61,10 @@
 	.initmark 100
 	.initmark 200
 	.initmark 300
+	.initmark 301
+	.initmark 302
+	.initmark 303
+	.initmark 304
 	.initmark 305
 	.initmark 400
 	.initmark 500
