@@ -95,6 +95,7 @@ ape_export_index = 0
    (.Lmacho_trie_edges_end - .Lmacho_trie_edges) +       \
    ape_export_index * MACHO_TRIE_NODE_SIZE)
 .macro	.export	symbol:req
+#if SupportsWindows()
  .section .sort.rodata.pe.edata.2.1.\symbol,"a",@progbits
 .Lpe.func.\symbol:
 	.long	RVA(\symbol)
@@ -109,6 +110,7 @@ ape_export_index = 0
 .Lpe.name.\symbol:
 	.asciz	"\symbol"
  .previous
+#endif /* SupportsWindows() */
 //	The mach-o side wants the same thing shaped differently: an nlist
 //	pointing into a string table by byte offset. That offset isn't
 //	something the assembler can work out across sections, so the

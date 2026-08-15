@@ -871,7 +871,11 @@ PFSTUB8(ape_macho_bss_vaddr, ADDR(.bss));
 PFSTUB8(ape_macho_bss_size, _end - ADDR(.bss));
 PFSTUB4(ape_macho_bindoff, RVA(ape_macho_bind));
 PFSTUB4(ape_macho_bindsize, APE_MACHO_BIND_SIZE);
-PFSTUB8(ape_macho_routine, cosmo_dylib_routine);
+/*	A library that would rather come up when the host says so can
+	leave the startup out, and then there is nothing for dyld to
+	call. */
+PFSTUB8(ape_macho_routine,
+        DEFINED(cosmo_dylib_routine) ? cosmo_dylib_routine : 0);
 PFSTUB4(ape_macho_rebaseoff, RVA(ape_macho_rebase));
 PFSTUB4(ape_macho_rebasesize, APE_MACHO_REBASE_SIZE);
 PFSTUB4(ape_macho_trieoff, RVA(ape_macho_trie));

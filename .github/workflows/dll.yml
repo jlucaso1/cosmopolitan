@@ -97,23 +97,20 @@ jobs:
             "${COSMOCC_VERSION}" \
             "${COSMOCC_SHA256}"
 
-      - name: build the libc for arm64 as a guest
-        run: |
-          make -j"$(nproc)" MODE=aarch64 \
-               CONFIG_CCFLAGS+=-fPIC \
-               "CONFIG_CPPFLAGS+=-DCOSMO_DSO -DSUPPORT_VECTOR=8" \
-               PKG=test/ape/dso/package.sh \
-               o/aarch64/cosmopolitan.a
+      - name: build the dylib for apple silicon
+        run: test/ape/dll/build.sh arm64
 
-      - name: what's left that a shared object can't have
+      - name: check what came out
         run: |
-          # an absolute address in an allocatable section is what stops a
-          # link, so count them before trying to link anything
-          .cosmocc/${COSMOCC_VERSION}/bin/aarch64-linux-cosmo-readelf -rW \
-              o/aarch64/cosmopolitan.a 2>/dev/null |
-            awk '/^Relocation section/{s=$3}
-                 /R_AARCH64_ABS(64|32)[ \t]/{if (s !~ /debug/ && s !~ /yoink/) print s}' |
-            sort | uniq -c | sort -rn | head -20
+          head -c4 o/dlltest/cosmo_dll_test.dylib | od -An -tx1 | grep -q 'cf fa ed fe'
+          # the cpu type has to say arm64, or the loader won't look twice
+          od -An -tx4 -j4 -N4 o/dlltest/cosmo_dll_test.dylib | grep -q '0100000c'
+          grep -q cosmo_dylib_boot o/dlltest/cosmo_dll_test.dylib
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dylib-arm64
+          path: o/dlltest/cosmo_dll_test.dylib
 
   linux:
     runs-on: ubuntu-latest

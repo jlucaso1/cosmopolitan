@@ -57,6 +57,9 @@ IMPORTS = [("__ape_pthread_key_create", "_pthread_key_create")]
 
 POINTER_SIZE = 8
 
+# what a whole address looks like to each architecture's relocations
+ABSOLUTE = re.compile(r"\b(R_X86_64_64|R_AARCH64_ABS64)\b")
+
 
 class Segment:
     def __init__(self, index, name, vmaddr, vmsize, fileoff, filesize):
@@ -215,7 +218,7 @@ def absolute_words(debug, segments, text_begins):
         if m:
             section = m.group(1)
             continue
-        if not section or "R_X86_64_64" not in line:
+        if not section or not ABSOLUTE.search(line):
             continue
         if section.startswith(".rela.debug") or section.startswith(".rela.eh"):
             continue

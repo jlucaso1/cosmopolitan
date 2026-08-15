@@ -3,6 +3,7 @@
 #
 #   test/ape/dll/build.sh windows   # -> cosmo_dll_test.dll
 #   test/ape/dll/build.sh macos     # -> cosmo_dll_test.dylib
+#   test/ape/dll/build.sh arm64     # -> cosmo_dll_test.dylib, apple silicon
 #
 # Cosmopolitan doesn't use a PE or mach-o linker: ape/ape.S writes those
 # headers by hand and ape.lds lays them out, so a library is a matter of
@@ -25,14 +26,18 @@ COSMOCC=${COSMOCC:-.cosmocc/3.9.2}
 OUT=${OUT:-o/dlltest}
 
 case "$TARGET" in
-  windows) VECTOR=; SUFFIX=dll;   BOOTSRC=libc/runtime/windllboot.c; PIC= ;;
-  macos)   VECTOR=8; SUFFIX=dylib; BOOTSRC=libc/runtime/dylibboot.c; PIC=-fPIC ;;
-  *) echo "usage: $0 windows|macos" >&2; exit 1 ;;
+  windows) VECTOR=; SUFFIX=dll;   BOOTSRC=libc/runtime/windllboot.c; PIC=
+           ARCH=x86_64; MODE=; PAGE=4096 ;;
+  macos)   VECTOR=8; SUFFIX=dylib; BOOTSRC=libc/runtime/dylibboot.c; PIC=-fPIC
+           ARCH=x86_64; MODE=; PAGE=4096 ;;
+  arm64)   VECTOR=8; SUFFIX=dylib; BOOTSRC=libc/runtime/dylibboot.c; PIC=-fPIC
+           ARCH=aarch64; MODE=aarch64; PAGE=16384 ;;
+  *) echo "usage: $0 windows|macos|arm64" >&2; exit 1 ;;
 esac
 
-CC="$COSMOCC/bin/x86_64-linux-cosmo-gcc"
-LD="$COSMOCC/bin/x86_64-linux-cosmo-ld.bfd"
-OBJCOPY="$COSMOCC/bin/x86_64-linux-cosmo-objcopy"
+CC="$COSMOCC/bin/$ARCH-linux-cosmo-gcc"
+LD="$COSMOCC/bin/$ARCH-linux-cosmo-ld.bfd"
+OBJCOPY="$COSMOCC/bin/$ARCH-linux-cosmo-objcopy"
 
 mkdir -p "$OUT"
 
@@ -40,15 +45,15 @@ mkdir -p "$OUT"
 # dyld slides a library wherever it likes and an absolute address in the
 # text would land in whatever happens to be there.
 VECTORFLAG=${VECTOR:+-DSUPPORT_VECTOR=$VECTOR}
-LIBC=${LIBC_A:-o//cosmopolitan.a}
+LIBC=${LIBC_A:-o/$MODE/cosmopolitan.a}
 if [ ! -f "$LIBC" ]; then
   if [ -n "$PIC" ]; then
-    make -j"$(nproc)" MODE= TLSCC=build/bootstrap/tlscc \
+    make -j"$(nproc)" MODE=$MODE TLSCC=build/bootstrap/tlscc \
          CONFIG_CCFLAGS+=-fPIC \
          "CONFIG_CPPFLAGS+=-DCOSMO_DSO $VECTORFLAG" \
          PKG=test/ape/dso/package.sh "$LIBC"
   else
-    make -j"$(nproc)" MODE= "$LIBC"
+    make -j"$(nproc)" MODE=$MODE "$LIBC"
   fi
 fi
 
@@ -81,7 +86,10 @@ $CC -D__LINKER__ -DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE \
 # static link at a fixed address, and which nothing can relocate
 # afterwards: an address inside an instruction is not a word dyld can
 # slide. Kept in the table, it is.
-$LD -static -nostdlib -no-pie -z noexecstack -z norelro --gc-sections \
+# apple silicon has bigger pages, and dyld will not map a segment that
+# doesn't start on one
+$LD -static -nostdlib -no-pie -z noexecstack -z norelro \
+    -z common-page-size=$PAGE -z max-page-size=$PAGE --gc-sections \
     ${PIC:+--emit-relocs --no-relax --undefined=cosmo_dylib_routine} \
     -T "$OUT/ape.lds" -o "$OUT/cosmo_dll_test.dbg" \
     "$OUT/ape.o" "$OUT/exports.o" "$OUT/library.o" $BOOT $LIBC
@@ -90,7 +98,7 @@ $OBJCOPY -S -O binary "$OUT/cosmo_dll_test.dbg" "$OUT/cosmo_dll_test.$SUFFIX"
 
 # the export trie and the rebase opcodes both hold what the link only
 # just decided, in encodings no relocation can carry
-if [ "$TARGET" = macos ]; then
+if [ "$SUFFIX" = dylib ]; then
   python3 test/ape/dll/machofix.py "$OUT/cosmo_dll_test.$SUFFIX" \
       "$OUT/cosmo_dll_test.dbg"
 fi

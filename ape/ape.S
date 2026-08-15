@@ -160,9 +160,11 @@ ape_mz:
 	.long	RVA(ape_pe)		// PE: the new technology
 #else
 	.long	0
+#ifdef __x86_64__
 	.org	0x78
 	pop	%rax
 	jmp	_start
+#endif
 #endif
 	.endfn	ape_mz,globl,hidden
 
@@ -883,8 +885,13 @@ netbsd.ident:
 
 ape_macho:
 	.long	0xFEEDFACE+1
+#ifdef __x86_64__
 	.long	MAC_CPU_NEXGEN32E
 	.long	MAC_CPU_NEXGEN32E_ALL
+#else
+	.long	MAC_CPU_ARM64
+	.long	MAC_CPU_ARM64_ALL
+#endif
 #ifdef APE_DLL
 	.long	MAC_DYLIB
 	.long	11				// number of load commands
@@ -2134,6 +2141,7 @@ PERFORMANCE OF THIS SOFTWARE."
 //
 //	The reference is weak because a library is free to leave the
 //	startup out and bring itself up whenever it likes.
+#ifdef __x86_64__
 	.text
 	.weak	cosmo_dll_boot
 ape_dll_main:
@@ -2148,6 +2156,15 @@ ape_dll_main:
 1:	mov	$1,%eax
 	ret
 	.endfn	ape_dll_main,globl
+#else
+//	Nothing loads a library by its entry point on this architecture,
+//	but the layout still wants one to name.
+	.text
+ape_dll_main:
+	mov	w0,#1
+	ret
+	.endfn	ape_dll_main,globl
+#endif /* __x86_64__ */
 
 //	The shell prologue in .head still wants a program entry to jump
 //	at. Nothing reaches it in a library, so point it here.
