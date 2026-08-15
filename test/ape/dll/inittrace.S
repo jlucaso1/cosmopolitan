@@ -1,0 +1,69 @@
+/*-*- mode:unix-assembly; indent-tabs-mode:t; tab-width:8; coding:utf-8     -*-│
+│ vi: set noet ft=asm ts=8 sw=8 fenc=utf-8                                 :vi │
+╞══════════════════════════════════════════════════════════════════════════════╡
+│ Copyright 2026 Justine Alexandra Roberts Tunney                              │
+│                                                                              │
+│ Permission to use, copy, modify, and/or distribute this software for         │
+│ any purpose with or without fee is hereby granted, provided that the         │
+│ above copyright notice and this permission notice appear in all copies.      │
+│                                                                              │
+│ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL                │
+│ WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED                │
+│ WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE             │
+│ AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL         │
+│ DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR        │
+│ PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER               │
+│ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
+│ PERFORMANCE OF THIS SOFTWARE.                                                │
+╚─────────────────────────────────────────────────────────────────────────────*/
+#include "libc/macros.h"
+
+//	Says how far _init got, for when it doesn't get all the way.
+//
+//	_init is a chain of fragments the linker sorts by priority and runs
+//	by falling through one into the next, so a marker is just another
+//	fragment. Everything is saved: %rdi and %rsi walk the decentralized
+//	data in lockstep with the code, and %r12 through %r15 carry what
+//	the startup was handed.
+
+	.macro	.initmark number:req
+	.init.start \number,_init_mark\number
+	push	%rax
+	push	%rcx
+	push	%rdx
+	push	%rsi
+	push	%rdi
+	push	%r8
+	push	%r9
+	push	%r10
+	push	%r11
+	lea	.Lmark\number(%rip),%rsi
+	mov	$0x2000004,%eax			// xnu write
+	mov	$2,%edi
+	mov	$9,%edx
+	syscall
+	pop	%r11
+	pop	%r10
+	pop	%r9
+	pop	%r8
+	pop	%rdi
+	pop	%rsi
+	pop	%rdx
+	pop	%rcx
+	pop	%rax
+	.init.end \number,_init_mark\number
+	.section .rodata.str1.1,"aMS",@progbits,1
+.Lmark\number:
+	.ascii	"init \number\n"
+	.previous
+	.endm
+
+	.initmark 100
+	.initmark 200
+	.initmark 300
+	.initmark 305
+	.initmark 400
+	.initmark 500
+	.initmark 600
+	.initmark 700
+	.initmark 800

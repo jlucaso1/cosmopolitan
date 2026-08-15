@@ -66,7 +66,7 @@ jobs:
             "${COSMOCC_SHA256}"
 
       - name: build the dylib
-        run: test/ape/dll/build.sh macos
+        run: INITTRACE=1 test/ape/dll/build.sh macos
 
       - name: check what came out
         run: |
