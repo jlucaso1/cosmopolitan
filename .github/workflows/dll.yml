@@ -186,6 +186,8 @@ jobs:
             grep -E "segname|fileoff|filesize|vmaddr|vmsize|dataoff|datasize" || true
           ls -l cosmo_dll_test.dylib
           clang -o host test/ape/dll/host.c
+          # let the loader say how far it gets before it stops
+          DYLD_PRINT_SEGMENTS=1 ./host 2>&1 | tail -30 || true
           ./host
 
   macos:
