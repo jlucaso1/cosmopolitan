@@ -73,6 +73,7 @@ static void trace(const char *tag, uintptr_t v) {
                : "rcx", "r11", "memory", "cc");
 }
 
+static unsigned long empty_auxv[2];
 static bool cosmo_dylib_booted;
 static char *cosmo_dylib_argv[2];
 static char *cosmo_dylib_environ[1];
