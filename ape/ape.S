@@ -967,8 +967,26 @@ ape_macho:
 	.stub	ape_ram_filesz,quad
 	.long	PROT_EXEC|PROT_READ|PROT_WRITE	// maxprot
 	.long	PROT_READ|PROT_WRITE		// initprot
+#ifdef APE_DLL
+//	The part of this segment with nothing in the file behind it has to
+//	be declared, or dyld maps only what the file has and the first
+//	write to anything uninitialized lands on nothing.
+	.long	1				// segment section count
+	.long	0				// flags
+	.ascin	"__bss",16			// sectname
+	.ascin	"__DATA",16			// segname
+	.stub	ape_macho_bss_vaddr,quad
+	.stub	ape_macho_bss_size,quad
+	.long	0				// offset: zero fill has none
+	.long	3				// align: 2**3
+	.long	0				// reloff
+	.long	0				// nreloc
+	.long	MAC_S_ZEROFILL			// flags
+	.long	0,0,0				// reserved
+#else
 	.long	0				// segment section count
 	.long	0				// flags
+#endif
 #ifdef APE_DLL
 //	Where dyld expects a library's symbol and string tables to live.
 45:	.long	MAC_LC_SEGMENT_64
