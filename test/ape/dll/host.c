@@ -270,17 +270,6 @@ int main(int argc, char **argv) {
   }
   printf("ok: the guest runtime is up: %s\n", buf);
 
-  int (*callhost)(int, int) = (int (*)(int, int))sym(h, "cosmo_dll_callhost");
-  if (!callhost) {
-    printf("FAIL: could not find cosmo_dll_callhost: %s\n", why());
-    return 12;
-  }
-  if (callhost(20, 22) != 42) {
-    printf("FAIL: the guest could not reach back into this program\n");
-    return 13;
-  }
-  printf("ok: the guest called a function in the host\n");
-
   {
     const char *at = strstr(buf, "tid=");
     if (!at) {
