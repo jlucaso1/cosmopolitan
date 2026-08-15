@@ -49,16 +49,70 @@ extern bool __cosmo_hosted;
 
 void _init(void);
 
+// the same thing, said the way the other architecture calls it
+extern void _init_with_args(int, char **, char **,
+                            unsigned long *) asm("_init");
+
 // the plain __get_tls() is a bare %fs read, which is what tlscc exists to
 // rewrite; this asks for the getter by name, since the file is compiled
 // without it and xnu keeps the tib somewhere else entirely
+#ifdef __x86_64__
 struct CosmoTib *__get_tls_rax(void);
+#define __get_tls_here() __get_tls_rax()
+#else
+#define __get_tls_here() __get_tls()
+#endif
 
 // weak, like cosmo2.c declares them: they come from the linker script,
 // so no package defines them
 typedef int init_f(int, char **, char **, unsigned long *);
 extern init_f *__init_array_start[] __attribute__((__weak__));
 extern init_f *__init_array_end[] __attribute__((__weak__));
+
+/**
+ * Asks the kernel what process this is, without the wrappers.
+ *
+ * They dispatch through system call numbers that one of the init
+ * fragments decodes, and the memory manager wants a pid before then.
+ */
+static long xnu_getpid(void) {
+  long pid;
+#ifdef __x86_64__
+  asm volatile("syscall"
+               : "=a"(pid)
+               : "0"(0x2000014)
+               : "rcx", "r11", "memory", "cc");
+#else
+  register long x16 asm("x16") = 20;
+  register long x0 asm("x0");
+  asm volatile("svc\t#0x80" : "=r"(x0) : "r"(x16) : "memory", "cc");
+  pid = x0;
+#endif
+  return pid;
+}
+
+/**
+ * Runs the decentralized startup.
+ *
+ * On one architecture it wants its arguments in the callee saved
+ * registers it walks its data with; on the other it is an ordinary
+ * function.
+ */
+static void run_init(int argc, char **argv, char **envp, unsigned long *auxv) {
+#ifdef __x86_64__
+  register long r12 asm("r12") = argc;
+  register char **r13 asm("r13") = argv;
+  register char **r14 asm("r14") = envp;
+  register unsigned long *r15 asm("r15") = auxv;
+  asm volatile("call\t_init"
+               : "+r"(r12), "+r"(r13), "+r"(r14), "+r"(r15)
+               : /* no inputs */
+               : "rdi", "rsi", "rbx", "rax", "rcx", "rdx", "r8", "r9", "r10",
+                 "r11", "memory", "cc");
+#else
+  _init_with_args(argc, argv, envp, auxv);
+#endif
+}
 
 static unsigned long empty_auxv[2];
 static bool cosmo_dylib_booted;
@@ -86,26 +140,26 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
 
   cosmo_dylib_hostos = _HOSTXNU;
   __cosmo_hosted = true;
-  __tls_enabled = false;
+  __tls_enabled_set(false);
 
   if (tls_disp) {
     __tls_disp = tls_disp;
     __tls_guest = 1;
   }
 
+  // apple silicon has bigger pages than intel does
+#ifdef __x86_64__
   __pagesize = 4096;
-  __gransize = 4096;
+#else
+  __pagesize = 16384;
+#endif
+  __gransize = __pagesize;
 
   // The host owns the process, so take its identity rather than minting
   // one the way a program's startup does. Raw, because the wrappers
   // dispatch through numbers that one of the fragments below decodes,
   // and __maps_init() wants a pid before then.
-  long pid;
-  asm volatile("syscall"
-               : "=a"(pid)
-               : "0"(0x2000014)  // xnu getpid
-               : "rcx", "r11", "memory", "cc");
-  __get_pib()->pid = pid;
+  __get_pib()->pid = xnu_getpid();
 
   if (!envp)
     envp = cosmo_dylib_environ;
@@ -132,15 +186,7 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   // decentralized init: system call dispatch, memory map, the lot. it
   // wants argc/argv/envp/auxv in r12 through r15, and a couple of the
   // fragments dereference argv, so give it something valid.
-  register long r12 asm("r12") = argc;
-  register char **r13 asm("r13") = argv;
-  register char **r14 asm("r14") = envp;
-  register unsigned long *r15 asm("r15") = auxv;
-  asm volatile("call\t_init"
-               : "+r"(r12), "+r"(r13), "+r"(r14), "+r"(r15)
-               : /* no inputs */
-               : "rdi", "rsi", "rbx", "rax", "rcx", "rdx", "r8", "r9", "r10",
-                 "r11", "memory", "cc");
+  run_init(argc, argv, envp, auxv);
 
   // cosmo.S copies these out of the registers _init takes, and it isn't
   // linked into a library, so a constructor that reads them would find an
@@ -164,7 +210,7 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   if (_weaken(__init_fds))
     _weaken(__init_fds)();
 
-  __cosmo_hosted_main_tib = __get_tls_rax();
+  __cosmo_hosted_main_tib = __get_tls_here();
   return 1;
 }
 
