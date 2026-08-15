@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
   // offered any. Both are worth covering, and the second is the one
   // that finds things.
   if (getenv("COSMO_DSO_BOOT_BARE")) {
-    void (*bare)(void) = (void (*)(void))sym(h, "cosmo_dso_boot");
+    void (*bare)(void) = (void (*)(void))dlsym(h, "cosmo_dso_boot");
     if (!bare) {
       printf("FAIL: no cosmo_dso_boot\n");
       return 3;
