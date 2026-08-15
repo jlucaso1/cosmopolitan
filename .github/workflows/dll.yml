@@ -223,10 +223,9 @@ jobs:
 
   macos:
     needs: dylib
-    # The library ape emits today is x86-64, and the free runners are all
-    # apple silicon now, so the host is built for intel too and the pair
-    # runs under Rosetta. A native arm64 library needs the aarch64 path in
-    # ape.S and a code signature, neither of which exists yet.
+    # This is the x86-64 library, and the free runners are all apple
+    # silicon now, so the host is built for intel too and the pair runs
+    # under Rosetta. The native one is the macos-arm64 job below.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
