@@ -67,9 +67,7 @@ cosmo_dylib_routine:
 	mov	x29,sp
 	str	x28,[sp,#16]
 	bl	__ape_load_tls
-#ifndef APE_DYLIB_NO_AUTOBOOT
 	bl	cosmo_dylib_routine_impl
-#endif
 	ldr	x28,[sp,#16]
 	ldp	x29,x30,[sp],#32
 	ret

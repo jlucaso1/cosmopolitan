@@ -98,7 +98,7 @@ jobs:
             "${COSMOCC_SHA256}"
 
       - name: build the dylib for apple silicon
-        run: EXTRA_CFLAGS=-DAPE_DYLIB_NO_AUTOBOOT test/ape/dll/build.sh arm64
+        run: test/ape/dll/build.sh arm64
 
       - name: check what came out
         run: |
