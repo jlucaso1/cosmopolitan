@@ -23,6 +23,7 @@
 #include "libc/intrin/maps.h"
 #include "libc/mem/mem.h"
 #include "libc/runtime/internal.h"
+#include "libc/sysv/pib.h"
 #include "libc/runtime/runtime.h"
 #include "libc/stdio/stdio.h"
 #include "libc/str/str.h"
@@ -172,6 +173,19 @@ void cosmo_dso_init(int argc, char **argv, char **envp, long tls_disp) {
   // doesn't repeat them; __get_main_stack() reads __envp directly
   __envp = envp;
   __oldstack = (intptr_t)__builtin_frame_address(0);
+
+  // The memory manager wants a pid before the fragments that would set
+  // one have run, and the locks it takes are keyed on the thread id that
+  // comes from it. Raw, because the wrappers dispatch through numbers
+  // one of those fragments decodes.
+  {
+    long pid;
+    asm volatile("syscall"
+                 : "=a"(pid)
+                 : "0"(39)  // getpid
+                 : "rcx", "r11", "memory", "cc");
+    __get_pib()->pid = pid;
+  }
 
   say("dso: pre-init\n");
   register long r12 asm("r12") = argc;
