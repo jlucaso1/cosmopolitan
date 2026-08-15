@@ -17,7 +17,6 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "libc/atomic.h"
-#include "libc/calls/syscall-sysv.internal.h"
 #include "libc/dce.h"
 #include "libc/intrin/weaken.h"
 #include "libc/runtime/internal.h"
@@ -110,10 +109,16 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   __pagesize = 4096;
   __gransize = 4096;
 
-  // the host owns the process, so take its identity rather than minting
-  // one the way a program's startup does
-  struct CosmoPib *pib = __get_pib();
-  pib->pid = sys_getpid().ax;
+  // The host owns the process, so take its identity rather than minting
+  // one the way a program's startup does. Raw, because the wrappers
+  // dispatch through numbers that one of the fragments below decodes,
+  // and __maps_init() wants a pid before then.
+  long pid;
+  asm volatile("syscall"
+               : "=a"(pid)
+               : "0"(0x2000014)  // xnu getpid
+               : "rcx", "r11", "memory", "cc");
+  __get_pib()->pid = pid;
 
   if (!envp)
     envp = cosmo_dylib_environ;
