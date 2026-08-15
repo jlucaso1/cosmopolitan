@@ -84,6 +84,7 @@ int cosmo_dylib_thread_init(void);
 #else
 // elf leaves the entry points undefined and the loader binds them, so
 // there is nothing to look up: taking their addresses is enough
+void cosmo_dso_boot(void);
 int cosmo_dso_thread_init(void);
 #define ADOPT_THREAD() cosmo_dso_thread_init()
 extern int napi_create_int32(napi_env, int, napi_value *);
@@ -203,6 +204,9 @@ EXPORTED napi_value napi_register_module_v1(napi_env env, napi_value exports) {
   BIND(napi_set_named_property);
 #undef BIND
 #elif !SupportsXnu()
+  // here the runtime comes up on this line rather than when the file was
+  // opened, since opening it happens under the loader's own lock
+  cosmo_dso_boot();
 #define BIND(f) f##_ = f
   BIND(napi_create_int32);
   BIND(napi_create_string_utf8);

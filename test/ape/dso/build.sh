@@ -68,11 +68,9 @@ done
 # -Bsymbolic            lets the libc's own globals bind at link time
 # --gc-sections         drops the windows import tables, which are
 #                       absolute by nature and would block an ET_DYN link
-# -init=cosmo_dso_autoboot  _init is ld's default DT_INIT and is not a
-#                           function; see test/ape/dso/dso.c. What goes
-#                           there instead brings the runtime up, so that
-#                           opening the library is all a host has to do.
-${LD:-ld} -shared --gc-sections -Bsymbolic -init=${DSOINIT:-cosmo_dso_autoboot} \
+# -init=cosmo_dso_noop  _init is ld's default DT_INIT and is not a
+#                       function; see test/ape/dso/dso.c
+${LD:-ld} -shared --gc-sections -Bsymbolic -init=cosmo_dso_noop \
     -T test/ape/dso/dso.lds -o "$OUT/$NAME.so" \
     $MODOBJS "$PICLIB"
 

@@ -77,17 +77,19 @@ static __thread void *cosmo_dso_tib
     __attribute__((tls_model("initial-exec"), used));
 
 /**
- * Brings the runtime up when the library is loaded.
- *
- * What the link points DT_INIT at, so that a host which only knows how
- * to open a library gets one that works. The windows half of this is the
- * library entry point and the mach-o half is LC_ROUTINES.
+ * Brings the runtime up without being told anything.
  *
  * The thread local slot comes from the library itself here, which the
- * other two can't do: an initial-exec variable is laid down by the same
- * loader that placed us, at a displacement every thread shares.
+ * other two platforms can't do: an initial-exec variable is laid down by
+ * the same loader that placed us, at a displacement every thread shares.
+ *
+ * Not DT_INIT, on purpose. That runs while the dynamic loader holds its
+ * own lock, and a runtime coming up wants to allocate and open things,
+ * which is exactly the position windows warns about. A host calls this
+ * when it has the library and not before: for a node addon that is the
+ * first line of napi_register_module_v1.
  */
-void cosmo_dso_autoboot(void) {
+void cosmo_dso_boot(void) {
   // Asking for the variable's address would read the segment register,
   // which is what the wrapper this file is compiled with rewrites into a
   // call to the getters, and the getters are what this is on its way to
