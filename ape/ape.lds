@@ -371,39 +371,6 @@ SECTIONS {
     KEEP(*(.initroepilogue))
     KEEP(*(SORT_BY_NAME(.sort.rodata.*)))
 
-#ifdef APE_DLL
-    /*	Mach-O keeps a library's symbol and string tables in a segment of
-	its own, called __LINKEDIT, and dyld goes looking for it by name.
-	Being a segment, it starts on a page of its own. */
-    . = ALIGN(. != 0 ? CONSTANT(COMMONPAGESIZE) : 0);
-    ape_linkedit_start = .;
-    KEEP(*(SORT_BY_NAME(.macho.linkedit.*)))
-
-    /*	The root of the export trie: no value of its own, and one child
-	per export. Counting them is the linker's job, so the node is
-	built here rather than in the .export directive that lays out
-	everything below it. */
-    ape_macho_trie = .;
-    BYTE(0);
-    BYTE((ape_macho_syms_end - ape_macho_syms) / 16);
-    KEEP(*(SORT_BY_NAME(.macho.trie.*)))
-    ape_macho_trie_end = .;
-
-    /*	Room for the rebase opcodes, which say which words in the image
-	hold addresses that move when dyld slides it. They can't be
-	written until the link is done, so the space is reserved here and
-	filled afterwards. What isn't used stays zero, which is the opcode
-	for stop. */
-    . = ALIGN(. != 0 ? 8 : 0);
-    ape_macho_rebase = .;
-    KEEP(*(.macho.rebase))
-    ape_macho_rebase_end = .;
-    ape_macho_bind = .;
-    KEEP(*(.macho.bind))
-    ape_macho_bind_end = .;
-
-    ape_linkedit_end = .;
-#endif /* APE_DLL */
     . = ALIGN(. != 0 ? CONSTANT(COMMONPAGESIZE) : 0); /* don't delete this line :o */
 
 /*END: read-only data that's only needed for initialization */
@@ -558,6 +525,46 @@ SECTIONS {
   . = ALIGN(CONSTANT(COMMONPAGESIZE));
   _end = .;
   PROVIDE(end = .);
+
+#ifdef APE_DLL
+/*	__LINKEDIT goes last, after everything that has a place in memory,
+	because that is where a mach-o keeps it and where anything that
+	appends to a library, a signature most of all, expects to be able
+	to write. */
+  .linkedit : {
+  /*	Mach-O keeps a library's symbol and string tables in a segment of
+	its own, called __LINKEDIT, and dyld goes looking for it by name.
+	Being a segment, it starts on a page of its own. */
+  . = ALIGN(. != 0 ? CONSTANT(COMMONPAGESIZE) : 0);
+  ape_linkedit_start = .;
+  KEEP(*(SORT_BY_NAME(.macho.linkedit.*)))
+
+  /*	The root of the export trie: no value of its own, and one child
+	per export. Counting them is the linker's job, so the node is
+	built here rather than in the .export directive that lays out
+	everything below it. */
+  ape_macho_trie = .;
+  BYTE(0);
+  BYTE((ape_macho_syms_end - ape_macho_syms) / 16);
+  KEEP(*(SORT_BY_NAME(.macho.trie.*)))
+  ape_macho_trie_end = .;
+
+  /*	Room for the rebase opcodes, which say which words in the image
+	hold addresses that move when dyld slides it. They can't be
+	written until the link is done, so the space is reserved here and
+	filled afterwards. What isn't used stays zero, which is the opcode
+	for stop. */
+  . = ALIGN(. != 0 ? 8 : 0);
+  ape_macho_rebase = .;
+  KEEP(*(.macho.rebase))
+  ape_macho_rebase_end = .;
+  ape_macho_bind = .;
+  KEEP(*(.macho.bind))
+  ape_macho_bind_end = .;
+
+  ape_linkedit_end = .;
+  } :Ram
+#endif
 
 /*END: nt addressability guarantee */
 /*END: bsd addressability guarantee */
@@ -881,10 +888,8 @@ PFSTUB4(ape_macho_rebasesize, APE_MACHO_REBASE_SIZE);
 PFSTUB4(ape_macho_trieoff, RVA(ape_macho_trie));
 PFSTUB4(ape_macho_triesize, ape_macho_trie_end - ape_macho_trie);
 
-/*	The segment those tables sit in. __RODATA has to stop where this
-	starts, since mach-o segments can't overlap. */
-PFSTUB8(ape_macho_rodata_filesz, ape_linkedit_start - ADDR(.rodata));
-PFSTUB8(ape_macho_rodata_memsz, ape_linkedit_start - ADDR(.rodata));
+/*	The segment those tables sit in, which is the last thing in the
+	file. */
 PFSTUB8(ape_linkedit_vaddr, ape_linkedit_start);
 PFSTUB8(ape_linkedit_memsz, ape_linkedit_end - ape_linkedit_start);
 PFSTUB8(ape_linkedit_offset, ape_linkedit_start - __executable_start);

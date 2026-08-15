@@ -944,19 +944,11 @@ ape_macho:
 #endif
 30:	.long	MAC_LC_SEGMENT_64
 	.long	40f-30b
-#ifdef APE_DLL
-	.ascin	"__RODATA",16
-	.stub	ape_rom_vaddr,quad
-	.stub	ape_macho_rodata_memsz,quad
-	.stub	ape_rom_offset,quad
-	.stub	ape_macho_rodata_filesz,quad
-#else
 	.ascin	"__RODATA",16
 	.stub	ape_rom_vaddr,quad
 	.stub	ape_rom_memsz,quad
 	.stub	ape_rom_offset,quad
 	.stub	ape_rom_filesz,quad
-#endif
 	.long	PROT_EXEC|PROT_READ|PROT_WRITE	// maxprot
 	.long	PROT_READ			// initprot
 	.long	0				// segment section count
