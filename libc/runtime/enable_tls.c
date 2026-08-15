@@ -122,6 +122,7 @@ static unsigned long ParseMask(const char *str) {
  * and your `errno` variable also won't be thread safe anymore.
  */
 void __cosmo_boot_trace(const char *, unsigned long);
+extern bool __cosmo_hosted;
 
 textstartup void __enable_tls(void) {
   __cosmo_boot_trace("ent", 0);
@@ -232,7 +233,9 @@ textstartup void __enable_tls(void) {
                     GetCurrentProcess(), &hThread, 0, false,
                     kNtDuplicateSameAccess);
     atomic_init(&tib->tib_syshand, hThread);
-  } else if (IsXnuSilicon()) {
+  } else if (IsXnuSilicon() && !__cosmo_hosted) {
+    // the ape loader is what provides this, and a library was loaded by
+    // whatever the host uses instead
     tib->tib_syshand = __syslib->__pthread_self();
   }
 
