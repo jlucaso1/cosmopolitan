@@ -141,11 +141,12 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   trace("env", (uintptr_t)envp);
   __oldstack = (intptr_t)__builtin_frame_address(0);
 
-  unsigned long *auxv;
-  char **p = envp;
-  while (*p)
-    ++p;
-  auxv = (unsigned long *)(p + 1);
+  // Past the environment's terminator is where a program finds its
+  // auxiliary vector, on the systems that have one. This one doesn't:
+  // xnu puts its own array of strings there, and walking that as pairs
+  // of numbers goes wherever it goes. Nothing in the runtime needs it
+  // here, since the page size is already set above.
+  unsigned long *auxv = empty_auxv;
 
   if (!argv) {
     cosmo_dylib_argv[0] = (char *)"cosmo";
