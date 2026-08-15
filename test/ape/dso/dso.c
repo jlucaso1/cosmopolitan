@@ -68,6 +68,45 @@ static struct CosmoTib *main_tib;
 void cosmo_dso_noop(void) {
 }
 
+// initial-exec, so its displacement from the segment base is fixed and
+// the same for every thread, which is what makes it usable as the slot
+static __thread void *cosmo_dso_tib __attribute__((tls_model("initial-exec")));
+
+/**
+ * Where this thread's storage begins, without reading it.
+ *
+ * The obvious way is a bare %fs read, which is exactly what the wrapper
+ * this file is compiled with rewrites into a call to the getters, and
+ * the getters are what we're on our way to setting up.
+ */
+static long cosmo_dso_segment_base(void) {
+  long base = 0;
+  register long rax asm("rax") = 158;      // arch_prctl
+  register long rdi asm("rdi") = 0x1003;   // ARCH_GET_FS
+  register long *rsi asm("rsi") = &base;
+  asm volatile("syscall"
+               : "+r"(rax)
+               : "r"(rdi), "r"(rsi)
+               : "rcx", "r11", "memory", "cc");
+  return base;
+}
+
+/**
+ * Brings the runtime up when the library is loaded.
+ *
+ * What the link points DT_INIT at, so that a host which only knows how
+ * to open a library gets one that works. The windows half of this is the
+ * library entry point and the mach-o half is LC_ROUTINES.
+ *
+ * The thread local slot comes from the library itself here, which the
+ * other two can't do: an initial-exec variable is laid down by the same
+ * loader that placed us, at a displacement every thread shares.
+ */
+void cosmo_dso_autoboot(void) {
+  cosmo_dso_init(0, 0, environ,
+                 (char *)&cosmo_dso_tib - (char *)cosmo_dso_segment_base());
+}
+
 /**
  * Starts Cosmopolitan Libc inside a host process.
  *
@@ -77,6 +116,13 @@ void cosmo_dso_noop(void) {
  * nothing else in the process is using it.
  */
 void cosmo_dso_init(int argc, char **argv, char **envp, long tls_disp) {
+  // the library brings itself up when it's opened, so a host that also
+  // asks finds it already done rather than doing it twice
+  static bool booted;
+  if (booted)
+    return;
+  booted = true;
+
   if (tls_disp) {
     __tls_disp = tls_disp;
     __tls_guest = 1;

@@ -78,9 +78,24 @@ NAPICALL int (*napi_set_named_property_)(napi_env, napi_value, const char *,
 __msabi bool cosmo_dll_boot(void);
 __msabi int cosmo_dll_thread_init(void);
 #define ADOPT_THREAD() cosmo_dll_thread_init()
-#else
+#elif SupportsXnu()
 int cosmo_dylib_thread_init(void);
 #define ADOPT_THREAD() cosmo_dylib_thread_init()
+#else
+// elf leaves the entry points undefined and the loader binds them, so
+// there is nothing to look up: taking their addresses is enough
+int cosmo_dso_thread_init(void);
+#define ADOPT_THREAD() cosmo_dso_thread_init()
+extern int napi_create_int32(napi_env, int, napi_value *);
+extern int napi_create_string_utf8(napi_env, const char *, size_t,
+                                   napi_value *);
+extern int napi_get_cb_info(napi_env, napi_callback_info, size_t *,
+                            napi_value *, napi_value *, void **);
+extern int napi_get_value_int32(napi_env, napi_value, int *);
+extern int napi_create_function(napi_env, const char *, size_t, napi_callback,
+                                void *, napi_value *);
+extern int napi_set_named_property(napi_env, napi_value, const char *,
+                                   napi_value);
 #endif
 
 /**
@@ -180,6 +195,15 @@ EXPORTED napi_value napi_register_module_v1(napi_env env, napi_value exports) {
     if (!f##_)                                               \
       return exports;                                        \
   } while (0)
+  BIND(napi_create_int32);
+  BIND(napi_create_string_utf8);
+  BIND(napi_get_cb_info);
+  BIND(napi_get_value_int32);
+  BIND(napi_create_function);
+  BIND(napi_set_named_property);
+#undef BIND
+#elif !SupportsXnu()
+#define BIND(f) f##_ = f
   BIND(napi_create_int32);
   BIND(napi_create_string_utf8);
   BIND(napi_get_cb_info);

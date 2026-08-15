@@ -23,6 +23,11 @@
 
 set -eu
 
+# What to build. The test library by default; NAME and SRCS point it at
+# something else, the way the mach-o and pe side does it.
+NAME=${NAME:-cosmo_dso_test}
+SRCS=${SRCS:-test/ape/dso/library.c}
+
 COSMOCC=${COSMOCC:-.cosmocc/3.9.2}
 OUT=${OUT:-o/dsotest}
 MODE=optlinux
@@ -51,21 +56,27 @@ CFLAGS="-fPIC -DCOSMO_DSO -D_COSMO_SOURCE -DMODE=$MODE -DSUPPORT_VECTOR=1 \
         -O2 -g -std=gnu23 -mavx -mno-red-zone -mno-tls-direct-seg-refs \
         -fno-common -fno-gnu-unique -fno-semantic-interposition"
 
-for src in dso library; do
+MODOBJS=
+for src in test/ape/dso/dso.c $SRCS; do
+  obj="$OUT/$(basename "$src" | tr . _).o"
   # shellcheck disable=SC2086
-  $TLSCC $CC $CFLAGS -c -o "$OUT/$src.o" "test/ape/dso/$src.c"
-  $FIXUPOBJ "$OUT/$src.o"
+  $TLSCC $CC $CFLAGS -c -o "$obj" "$src"
+  $FIXUPOBJ "$obj"
+  MODOBJS="$MODOBJS $obj"
 done
 
 # -Bsymbolic            lets the libc's own globals bind at link time
 # --gc-sections         drops the windows import tables, which are
 #                       absolute by nature and would block an ET_DYN link
-# -init=cosmo_dso_noop  _init is ld's default DT_INIT and is not a
-#                       function; see test/ape/dso/dso.c
-${LD:-ld} -shared --gc-sections -Bsymbolic -init=cosmo_dso_noop \
-    -T test/ape/dso/dso.lds -o "$OUT/cosmo_dso_test.so" \
-    "$OUT/dso.o" "$OUT/library.o" "$PICLIB"
+# -init=cosmo_dso_autoboot  _init is ld's default DT_INIT and is not a
+#                           function; see test/ape/dso/dso.c. What goes
+#                           there instead brings the runtime up, so that
+#                           opening the library is all a host has to do.
+${LD:-ld} -shared --gc-sections -Bsymbolic -init=${DSOINIT:-cosmo_dso_autoboot} \
+    -T test/ape/dso/dso.lds -o "$OUT/$NAME.so" \
+    $MODOBJS "$PICLIB"
 
-${HOSTCC:-cc} -O2 -o "$OUT/host" test/ape/dso/host.c -ldl -lpthread
+[ -n "${NOHOST:-}" ] ||
+  ${HOSTCC:-cc} -O2 -o "$OUT/host" test/ape/dso/host.c -ldl -lpthread
 
-ls -l "$OUT/cosmo_dso_test.so" "$OUT/host"
+ls -l "$OUT/$NAME.so"

@@ -162,6 +162,13 @@ jobs:
       - name: load it
         run: o/dsotest/host o/dsotest/cosmo_dso_test.so
 
+      - name: build the node addon and run it
+        run: |
+          NAME=cosmo_addon NOHOST=1 SRCS=test/ape/napi/addon.c \
+            test/ape/dso/build.sh
+          mv o/dsotest/cosmo_addon.so o/dsotest/cosmo_addon.node
+          node test/ape/napi/test.js o/dsotest/cosmo_addon.node
+
   windows:
     needs: dll
     runs-on: windows-latest
