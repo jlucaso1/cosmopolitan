@@ -71,7 +71,7 @@ CFLAGS="-DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE ${PIC:--fno-pie} \
         ${PIC:+-DCOSMO_DSO} \
         -nostdinc -iquote. -I. -isystem libc/isystem \
         -include libc/integral/normalize.inc \
-        -O2 ${REDZONE}"
+        -O2 ${REDZONE} ${EXTRA_CFLAGS:-}"
 
 # shellcheck disable=SC2086
 $CC $CFLAGS -c -o "$OUT/ape.o" ape/ape.S
