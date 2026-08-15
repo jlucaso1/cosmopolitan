@@ -182,7 +182,7 @@ jobs:
           codesign -s - --force cosmo_dll_test.dylib
           codesign -dv cosmo_dll_test.dylib 2>&1 | head -5 || true
           dyld_info -exports cosmo_dll_test.dylib || true
-          clang -o host test/ape/dll/host.c
+          clang -Wl,-export_dynamic -o host test/ape/dll/host.c
           ./host
 
   macos:
@@ -210,5 +210,5 @@ jobs:
           echo "--- what dyld makes of the rebase information ---"
           dyld_info -fixups cosmo_dll_test.dylib | head -20 || true
           echo "--- now try to use it ---"
-          clang -arch x86_64 -o host test/ape/dll/host.c
+          clang -arch x86_64 -Wl,-export_dynamic -o host test/ape/dll/host.c
           ./host

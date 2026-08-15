@@ -28,6 +28,12 @@ static const char *why(void) {
 #include <unistd.h>
 #define LIBRARY "./cosmo_dll_test.dylib"
 extern char **environ;
+
+// What the library asks the process for. A plugin reaches its host this
+// way, and a native addon reaches the runtime that loaded it.
+int cosmo_test_host_add(int a, int b) {
+  return a + b;
+}
 static void *load(const char *path) {
   return dlopen(path, RTLD_NOW | RTLD_LOCAL);
 }
@@ -193,6 +199,18 @@ int main(int argc, char **argv) {
     return 9;
   }
   printf("ok: the guest runtime is up: %s\n", buf);
+
+  int (*callhost)(int, int) = (int (*)(int, int))sym(h, "cosmo_dll_callhost");
+  if (!callhost) {
+    printf("FAIL: could not find cosmo_dll_callhost: %s\n", why());
+    return 12;
+  }
+  if (callhost(20, 22) != 42) {
+    printf("FAIL: the guest could not reach back into this program\n");
+    return 13;
+  }
+  printf("ok: the guest called a function in the host\n");
+
   {
     const char *at = strstr(buf, "tid=");
     if (!at) {
@@ -251,6 +269,18 @@ int main(int argc, char **argv) {
     return 6;
   }
   printf("ok: the guest runtime is up: %s\n", buf);
+
+  int (*callhost)(int, int) = (int (*)(int, int))sym(h, "cosmo_dll_callhost");
+  if (!callhost) {
+    printf("FAIL: could not find cosmo_dll_callhost: %s\n", why());
+    return 12;
+  }
+  if (callhost(20, 22) != 42) {
+    printf("FAIL: the guest could not reach back into this program\n");
+    return 13;
+  }
+  printf("ok: the guest called a function in the host\n");
+
   {
     const char *at = strstr(buf, "tid=");
     if (!at) {

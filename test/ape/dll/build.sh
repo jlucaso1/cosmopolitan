@@ -78,6 +78,8 @@ $CC $CFLAGS -c -o "$OUT/ape.o" ape/ape.S
 # shellcheck disable=SC2086
 $CC $CFLAGS -c -o "$OUT/exports.o" test/ape/dll/exports.S
 # shellcheck disable=SC2086
+$CC $CFLAGS -c -o "$OUT/exports2.o" test/ape/dll/exports2.S
+# shellcheck disable=SC2086
 $CC $CFLAGS -std=gnu2x -c -o "$OUT/library.o" test/ape/dll/library.c
 
 # shellcheck disable=SC2086
@@ -111,7 +113,7 @@ $LD -static -nostdlib -no-pie -z noexecstack -z norelro \
     -z common-page-size=$PAGE -z max-page-size=$PAGE --gc-sections \
     ${PIC:+--emit-relocs --no-relax --undefined=cosmo_dylib_routine} \
     -T "$OUT/ape.lds" -o "$OUT/cosmo_dll_test.dbg" \
-    "$OUT/ape.o" "$OUT/exports.o" "$OUT/library.o" $BOOT $THUNK $LIBC
+    "$OUT/ape.o" "$OUT/exports.o" "$OUT/exports2.o" "$OUT/library.o" $BOOT $THUNK $LIBC
 
 $OBJCOPY -S -O binary "$OUT/cosmo_dll_test.dbg" "$OUT/cosmo_dll_test.$SUFFIX"
 

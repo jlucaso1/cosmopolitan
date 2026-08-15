@@ -68,6 +68,27 @@ EXPORTED int cosmo_dll_init(void) {
 #endif
 
 /**
+ * Where dyld puts a function belonging to whoever opened us.
+ *
+ * Not a library by name: flat, meaning whatever is already loaded, which
+ * for a plugin is the program itself. The declaration is here and the
+ * asking is in test/ape/dll/exports2.S, since nothing has to see both.
+ */
+int (*__ape_host_add)(int, int);
+
+/**
+ * Calls back into the host.
+ *
+ * The shape a native addon has: a library that reaches the program that
+ * loaded it, and gets an answer only that program could give.
+ */
+EXPORTED int cosmo_dll_callhost(int a, int b) {
+  if (!__ape_host_add)
+    return -1;
+  return __ape_host_add(a, b);
+}
+
+/**
  * Reports the process this is running in, formatted by cosmopolitan.
  *
  * Where the one above only has to be reachable, this has to work: it
