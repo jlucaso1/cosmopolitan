@@ -62,7 +62,9 @@ ABSOLUTE = re.compile(r"\b(R_X86_64_64|R_AARCH64_ABS64)\b")
 
 
 class Segment:
-    def __init__(self, index, name, vmaddr, vmsize, fileoff, filesize):
+    def __init__(self, index, name, vmaddr, vmsize, fileoff, filesize,
+                 initprot=0):
+        self.initprot = initprot
         self.index = index
         self.name = name
         self.vmaddr = vmaddr
@@ -126,8 +128,10 @@ def parse(image):
             vmaddr, vmsize, fileoff, filesize = struct.unpack_from(
                 "<4Q", image, pos + 24
             )
+            initprot = struct.unpack_from("<I", image, pos + 60)[0]
             segments.append(
-                Segment(len(segments), name, vmaddr, vmsize, fileoff, filesize)
+                Segment(len(segments), name, vmaddr, vmsize, fileoff, filesize,
+                        initprot)
             )
         elif cmd == LC_SYMTAB:
             symtab = struct.unpack_from("<4I", image, pos + 8)
@@ -212,6 +216,7 @@ def absolute_words(debug, segments, text_begins):
     ).stdout.decode(errors="replace")
     section = None
     found = set()
+    readonly = {}
     skipped = 0
     for line in out.splitlines():
         m = re.match(r"Relocation section '(\S+)'", line)
@@ -223,6 +228,12 @@ def absolute_words(debug, segments, text_begins):
         if section.startswith(".rela.debug") or section.startswith(".rela.eh"):
             continue
         addr = int(line.split()[0], 16)
+        where = next((s for s in segments if s.holds(addr)), None)
+        if where is not None and not (where.initprot & 2):
+            # dyld won't write to a segment that isn't writable, and says
+            # so by refusing the whole library
+            readonly.setdefault(section, []).append(addr)
+            continue
         if addr % POINTER_SIZE:
             skipped += 1  # dyld can only rebase aligned words
             continue
@@ -235,6 +246,14 @@ def absolute_words(debug, segments, text_begins):
         found.add(addr)
     if skipped:
         print("warning: %d unaligned absolute words left alone" % skipped)
+    for section, addrs in sorted(readonly.items()):
+        print(
+            "warning: %d absolute words in a read only segment, from %s: %s"
+            % (section, len(addrs), section)
+            if False
+            else "warning: %d absolute words %s can't be rebased, first %#x"
+            % (len(addrs), section, addrs[0])
+        )
     return sorted(found)
 
 
