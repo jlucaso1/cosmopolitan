@@ -44,6 +44,31 @@
 #define APE_MACHO_BIND_SIZE 512
 
 /**
+ * How much of __LINKEDIT is set aside for the mach-o export trie.
+ *
+ * Built after the link, out of the symbol table, since the offsets
+ * inside it are uleb128 and depend on what the whole thing came to.
+ */
+#define APE_MACHO_TRIE_SIZE 4096
+
+/**
+ * How much room each .import directive takes.
+ *
+ * Fixed width so the table can be walked without having read it.
+ */
+#define APE_MACHO_IMPORT_STRIDE 80
+
+/**
+ * Where an imported symbol is looked for.
+ *
+ * A named library, meaning the first one this image loads, or whatever
+ * is already in the process, which is how a plugin reaches the program
+ * that opened it.
+ */
+#define APE_IMPORT_FROM_DYLIB 0
+#define APE_IMPORT_FLAT 1
+
+/**
  * Adjusts virtual address so it's relative to load address.
  */
 #define PHYSICAL(x) ((x) - (IMAGE_BASE_VIRTUAL - IMAGE_BASE_PHYSICAL))
@@ -63,6 +88,16 @@
 #error "IMAGE_BASE_REAL must be 4kb aligned"
 #endif
 
+/**
+ * How wide each mach-o string table entry is.
+ *
+ * Fixed, so which string belongs to a symbol falls out of where the
+ * symbol is, which is what lets exports be written in more than one
+ * file. Sixty four bytes fits any reasonable name with the leading
+ * underscore mach-o expects.
+ */
+#define MACHO_STRTAB_STRIDE 64
+
 #ifdef __ASSEMBLER__
 #include "libc/dce.h"
 
@@ -81,21 +116,8 @@
 //	for free.
 //
 //	@see	ape/ape.S for the directory this feeds
-//	Mach-O string table entries are fixed width so their offsets can be
-//	computed from the index. Sixty four bytes fits any reasonable
-//	exported name with the leading underscore mach-o expects.
-#define MACHO_STRTAB_STRIDE 64
-#define MACHO_TRIE_ROOT_SIZE 2
-#define MACHO_TRIE_NODE_SIZE 8
 ape_export_index = 0
 
-//	Where an export's trie node lands, measured from the root. The
-//	edges are variable length and the nodes aren't, so this only needs
-//	the total size of the former, which a label at the end gives.
-#define MACHO_TRIE_OFFSET(SYMBOL)                        \
-  (MACHO_TRIE_ROOT_SIZE +                                \
-   (.Lmacho_trie_edges_end - .Lmacho_trie_edges) +       \
-   ape_export_index * MACHO_TRIE_NODE_SIZE)
 .macro	.export	symbol:req
 #if SupportsWindows()
  .section .sort.rodata.pe.edata.2.1.\symbol,"a",@progbits
@@ -149,41 +171,21 @@ ape_export_index = 0
 	.asciz	"_\symbol"
 	.org	MACHO_STRTAB_STRIDE,0	// pad this fragment to the stride
  .previous
-//	dyld looks up a symbol by walking a trie, which is what dlsym()
-//	reads; the symbol table above is only there to be listed. The root
-//	node belongs to the linker script, since only it knows how many
-//	exports there were. What each export contributes is one edge out
-//	of the root and the node that edge leads to.
-//
-//	Offsets within a trie are uleb128, which no relocation can encode,
-//	so both are arranged to be arithmetic the assembler can do itself:
-//	every node is the same size, and the edges are measured with a
-//	label. That means all of a program's .export directives have to sit
-//	in one translation unit, which is how they get written anyway. The
-//	address is the one thing left over, being a link time value, so it
-//	is written into the image afterwards.
- .section .macho.trie.1.edges,"a",@progbits
- .if ape_export_index == 0
-.Lmacho_trie_edges:
- .endif
-	.asciz	"_\symbol"
-	.byte	MACHO_TRIE_OFFSET(\symbol) & 0x7f | 0x80
-	.byte	(MACHO_TRIE_OFFSET(\symbol) >> 7) & 0x7f
- .previous
- .section .macho.trie.2.nodes,"a",@progbits
-	.byte	6			// terminal size: the two below
-	.byte	0			// flags: a regular export
-	.byte	0x80,0x80,0x80,0x80,0	// address, written in after linking
-	.byte	0			// number of children
- .previous
  ape_export_index = ape_export_index + 1
 .endm
 
-//	Closes the export trie. Goes after the last .export, and only in
-//	the file they're written in.
-.macro	.exports_end
- .section .macho.trie.1.edges,"a",@progbits
-.Lmacho_trie_edges_end:
+//	Says that a word in this image is to be filled in with the address
+//	of something outside it, which is the only way a library reaches
+//	whatever loaded it.
+//
+//	The table is walked after the link, so unlike the export directory
+//	these can be written wherever they belong.
+.macro	.import	slot:req symbol:req where=APE_IMPORT_FROM_DYLIB
+ .section .macho.imports.1.\symbol,"a",@progbits
+	.quad	\slot
+	.quad	\where
+	.asciz	"\symbol"
+	.org	APE_MACHO_IMPORT_STRIDE,0
  .previous
 .endm
 #endif /* __ASSEMBLER__ */

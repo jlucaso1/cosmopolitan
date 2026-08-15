@@ -115,11 +115,12 @@ $LD -static -nostdlib -no-pie -z noexecstack -z norelro \
 
 $OBJCOPY -S -O binary "$OUT/cosmo_dll_test.dbg" "$OUT/cosmo_dll_test.$SUFFIX"
 
-# the export trie and the rebase opcodes both hold what the link only
-# just decided, in encodings no relocation can carry
+# the export trie, the rebase opcodes and the binds all hold what the
+# link only just decided, in encodings no relocation can carry
 if [ "$SUFFIX" = dylib ]; then
-  python3 test/ape/dll/machofix.py "$OUT/cosmo_dll_test.$SUFFIX" \
-      "$OUT/cosmo_dll_test.dbg"
+  APEDYLIB=${APEDYLIB:-o//tool/build/apedylib}
+  [ -x "$APEDYLIB" ] || make -j"$(nproc)" MODE= "$APEDYLIB"
+  "$APEDYLIB" "$OUT/cosmo_dll_test.$SUFFIX" "$OUT/cosmo_dll_test.dbg"
 fi
 
 ls -l "$OUT/cosmo_dll_test.$SUFFIX"

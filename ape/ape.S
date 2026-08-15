@@ -1068,6 +1068,18 @@ ape_macho:
 	.pushsection .macho.bind,"a",@progbits
 	.space	APE_MACHO_BIND_SIZE,0
 	.popsection
+	.pushsection .macho.trie,"a",@progbits
+	.space	APE_MACHO_TRIE_SIZE,0
+	.popsection
+
+//	What the runtime needs from whoever loaded it. A thread local slot
+//	has to come from the pthread implementation already handing them
+//	out, and on this platform so does the answer to which thread this
+//	is. Weak, because a library is free to link neither.
+	.weak	__ape_pthread_key_create
+	.weak	__ape_pthread_threadid_np
+	.import	__ape_pthread_key_create,"_pthread_key_create"
+	.import	__ape_pthread_threadid_np,"_pthread_threadid_np"
 
 //	dlsym() is answered from the export trie, not the symbol table, and
 //	the rebase opcodes are how dyld learns which words hold addresses,

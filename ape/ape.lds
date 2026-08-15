@@ -371,6 +371,14 @@ SECTIONS {
     KEEP(*(.initroepilogue))
     KEEP(*(SORT_BY_NAME(.sort.rodata.*)))
 
+    /*	What the image asks the host for. Read after the link rather than
+	by anything at runtime, so it only has to be somewhere the file
+	has bytes for. */
+    . = ALIGN(. != 0 ? 8 : 0);
+    ape_macho_imports = .;
+    KEEP(*(SORT_BY_NAME(.macho.imports.*)))
+    ape_macho_imports_end = .;
+
     . = ALIGN(. != 0 ? CONSTANT(COMMONPAGESIZE) : 0); /* don't delete this line :o */
 
 /*END: read-only data that's only needed for initialization */
@@ -540,15 +548,11 @@ SECTIONS {
   KEEP(*(SORT_BY_NAME(.macho.linkedit.*)))
   . = ALIGN(. != 0 ? 8 : 0);
 
-  /*	The root of the export trie: no value of its own, and one child
-	per export. Counting them is the linker's job, so the node is
-	built here rather than in the .export directive that lays out
-	everything below it. */
+  /*	Room for the export trie, which apedylib builds out of the symbol
+	table above once the link has decided where everything is. */
   . = ALIGN(. != 0 ? 8 : 0);
   ape_macho_trie = .;
-  BYTE(0);
-  BYTE((ape_macho_syms_end - ape_macho_syms) / 16);
-  KEEP(*(SORT_BY_NAME(.macho.trie.*)))
+  KEEP(*(.macho.trie))
   ape_macho_trie_end = .;
 
   /*	Room for the rebase opcodes, which say which words in the image
@@ -888,7 +892,7 @@ PFSTUB8(ape_macho_routine,
 PFSTUB4(ape_macho_rebaseoff, RVA(ape_macho_rebase));
 PFSTUB4(ape_macho_rebasesize, APE_MACHO_REBASE_SIZE);
 PFSTUB4(ape_macho_trieoff, RVA(ape_macho_trie));
-PFSTUB4(ape_macho_triesize, ape_macho_trie_end - ape_macho_trie);
+PFSTUB4(ape_macho_triesize, APE_MACHO_TRIE_SIZE);
 
 /*	The segment those tables sit in, which is the last thing in the
 	file. */
