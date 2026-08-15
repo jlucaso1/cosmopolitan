@@ -106,6 +106,7 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
     __tls_guest = 1;
   }
 
+  trace("flag", 0);
   __pagesize = 4096;
   __gransize = 4096;
 
@@ -118,7 +119,9 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
                : "=a"(pid)
                : "0"(0x2000014)  // xnu getpid
                : "rcx", "r11", "memory", "cc");
+  trace("pid", (uintptr_t)pid);
   __get_pib()->pid = pid;
+  trace("pib", (uintptr_t)__get_pib());
 
   if (!envp)
     envp = cosmo_dylib_environ;
@@ -127,6 +130,7 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
 
   // libc/crt/crt.S does these before entering the runtime, and _init
   // doesn't repeat them; __get_main_stack() reads __envp directly
+  trace("env", (uintptr_t)envp);
   __oldstack = (intptr_t)__builtin_frame_address(0);
 
   unsigned long *auxv;
