@@ -54,7 +54,7 @@ extern init_f *__init_array_start[] __attribute__((__weak__));
 extern init_f *__init_array_end[] __attribute__((__weak__));
 
 static bool cosmo_dll_booted;
-struct CosmoTib *__cosmo_hosted_main_tib;
+extern struct CosmoTib *__cosmo_hosted_main_tib;
 static char *cosmo_dll_argv[2];
 static char *cosmo_dll_environ[1];
 

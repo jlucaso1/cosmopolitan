@@ -38,7 +38,9 @@
  * point at.
  */
 
-extern struct CosmoTib *__cosmo_hosted_main_tib;
+// The thread that booted, whichever host it was. Defined here because
+// both boot files write it and only this one reads it.
+struct CosmoTib *__cosmo_hosted_main_tib;
 
 struct CosmoTib *__get_tls_rax(void);
 

@@ -25,7 +25,6 @@ static const char *why(void) {
 #include <dlfcn.h>
 #include <pthread.h>
 #include <string.h>
-#include <stdint.h>
 #include <unistd.h>
 #define LIBRARY "./cosmo_dll_test.dylib"
 extern char **environ;
@@ -46,6 +45,7 @@ static int (*guest_thread_init)(void);
 static void (*guest_thread_fini)(void);
 static int (*guest_probe)(char *, int);
 static int thread_failed;
+static char main_tid[32];
 
 // a thread the host made, which enters the guest with an empty tib slot
 static DWORD WINAPI thread_main(LPVOID arg) {
@@ -86,6 +86,7 @@ static int (*guest_thread_init)(void);
 static void (*guest_thread_fini)(void);
 static int (*guest_probe_fn)(char *, int);
 static int thread_failed;
+static char main_tid[32];
 
 // a thread the host made, which enters the guest with an empty tib slot
 static void *thread_main(void *arg) {
@@ -100,13 +101,11 @@ static void *thread_main(void *arg) {
     printf("FAIL: guest getpid said %d on a host thread\n", pid);
     thread_failed = 1;
   }
-  // the guest has to know it isn't the thread it started on
-  uint64_t self;
-  pthread_threadid_np(0, &self);
-  char mine[32];
-  snprintf(mine, sizeof(mine), "tid=%d", (int)self);
-  if (!strstr(buf, mine)) {
-    printf("FAIL: guest said \"%s\", this thread is %s\n", buf, mine);
+  // the guest has to know it isn't the thread it started on. Its own
+  // numbering, not the host's: gettid() on this platform answers with a
+  // mach port, which is nothing like a pthread's id.
+  if (strstr(buf, main_tid)) {
+    printf("FAIL: guest reports %s on a thread that isn't it\n", main_tid);
     thread_failed = 1;
   }
   guest_thread_fini();
@@ -190,6 +189,14 @@ int main(int argc, char **argv) {
     return 9;
   }
   printf("ok: the guest runtime is up: %s\n", buf);
+  {
+    const char *at = strstr(buf, "tid=");
+    if (!at) {
+      printf("FAIL: the guest didn't say which thread it was on\n");
+      return 10;
+    }
+    snprintf(main_tid, sizeof(main_tid), "%s", at);
+  }
 
   // node calls a native addon from whatever thread it likes, so a hosted
   // runtime that only works on the one that loaded it is of little use
@@ -240,6 +247,14 @@ int main(int argc, char **argv) {
     return 6;
   }
   printf("ok: the guest runtime is up: %s\n", buf);
+  {
+    const char *at = strstr(buf, "tid=");
+    if (!at) {
+      printf("FAIL: the guest didn't say which thread it was on\n");
+      return 10;
+    }
+    snprintf(main_tid, sizeof(main_tid), "%s", at);
+  }
 
   // node calls a native addon from its own threads, so a hosted runtime
   // that only works on the one that loaded it is of little use
