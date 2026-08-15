@@ -359,6 +359,12 @@ static size_t build_rebase(unsigned char *out, size_t room) {
 
 static Elf64_Ehdr *elf_header;
 
+static void parse_elf(void) {
+  elf_header = (Elf64_Ehdr *)debug;
+  if (debugsize < sizeof(Elf64_Ehdr) || memcmp(debug, ELFMAG, 4))
+    die("the debug file isn't an elf");
+}
+
 static Elf64_Shdr *elf_section(int i) {
   return (Elf64_Shdr *)(debug + elf_header->e_shoff + i * elf_header->e_shentsize);
 }
@@ -385,9 +391,6 @@ static uint64_t elf_symbol(const char *want) {
  * holds the ones it made itself, which no record mentions.
  */
 static void collect_rebases(void) {
-  elf_header = (Elf64_Ehdr *)debug;
-  if (debugsize < sizeof(Elf64_Ehdr) || memcmp(debug, ELFMAG, 4))
-    die("the debug file isn't an elf");
   bool is_arm = elf_header->e_machine == EM_AARCH64;
   for (int i = 0; i < elf_header->e_shnum; ++i) {
     Elf64_Shdr *sh = elf_section(i);
@@ -470,6 +473,7 @@ int main(int argc, char *argv[]) {
   image = slurp(argv[1], &imagesize);
   debug = slurp(argv[2], &debugsize);
   parse_macho();
+  parse_elf();
 
   size_t n;
   n = build_trie((unsigned char *)image + dyldinfo->export_off,
