@@ -34,8 +34,13 @@ jobs:
             "${COSMOCC_VERSION}" \
             "${COSMOCC_SHA256}"
 
-      - name: build the dll
-        run: test/ape/dll/build.sh windows
+      - name: build the dll and the node addon
+        run: |
+          test/ape/dll/build.sh windows
+          NAME=cosmo_addon \
+            SRCS="test/ape/napi/addon.c test/ape/napi/exports.S" \
+            test/ape/dll/build.sh windows
+          mv o/dlltest/cosmo_addon.dll o/dlltest/cosmo_addon.node
 
       - name: check what came out
         run: |
@@ -48,7 +53,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: dll
-          path: o/dlltest/cosmo_dll_test.dll
+          path: |
+            o/dlltest/cosmo_dll_test.dll
+            o/dlltest/cosmo_addon.node
 
   dylib:
     runs-on: ubuntu-latest
@@ -65,8 +72,13 @@ jobs:
             "${COSMOCC_VERSION}" \
             "${COSMOCC_SHA256}"
 
-      - name: build the dylib
-        run: test/ape/dll/build.sh macos
+      - name: build the dylib and the node addon
+        run: |
+          test/ape/dll/build.sh macos
+          NAME=cosmo_addon \
+            SRCS="test/ape/napi/addon.c test/ape/napi/exports.S" \
+            test/ape/dll/build.sh macos
+          mv o/dlltest/cosmo_addon.dylib o/dlltest/cosmo_addon.node
 
       - name: check what came out
         run: |
@@ -79,7 +91,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: dylib
-          path: o/dlltest/cosmo_dll_test.dylib
+          path: |
+            o/dlltest/cosmo_dll_test.dylib
+            o/dlltest/cosmo_addon.node
 
   aarch64:
     runs-on: ubuntu-latest
@@ -97,8 +111,13 @@ jobs:
             "${COSMOCC_VERSION}" \
             "${COSMOCC_SHA256}"
 
-      - name: build the dylib for apple silicon
-        run: test/ape/dll/build.sh arm64
+      - name: build the dylib and the node addon for apple silicon
+        run: |
+          test/ape/dll/build.sh arm64
+          NAME=cosmo_addon \
+            SRCS="test/ape/napi/addon.c test/ape/napi/exports.S" \
+            test/ape/dll/build.sh arm64
+          mv o/dlltest/cosmo_addon.dylib o/dlltest/cosmo_addon.node
 
       - name: check what came out
         run: |
@@ -110,7 +129,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: dylib-arm64
-          path: o/dlltest/cosmo_dll_test.dylib
+          path: |
+            o/dlltest/cosmo_dll_test.dylib
+            o/dlltest/cosmo_addon.node
 
   linux:
     runs-on: ubuntu-latest
@@ -162,6 +183,8 @@ jobs:
           echo "building the host with $CC"
           "$CC" -o host.exe test/ape/dll/host.c
           ./host.exe
+          echo "--- and now node ---"
+          node test/ape/napi/test.js ./cosmo_addon.node
 
   macos-arm64:
     needs: aarch64
@@ -184,6 +207,9 @@ jobs:
           dyld_info -exports cosmo_dll_test.dylib || true
           clang -Wl,-export_dynamic -o host test/ape/dll/host.c
           ./host
+          echo "--- and now node ---"
+          codesign -s - --force cosmo_addon.node
+          node test/ape/napi/test.js ./cosmo_addon.node
 
   macos:
     needs: dylib
@@ -212,3 +238,5 @@ jobs:
           echo "--- now try to use it ---"
           clang -arch x86_64 -Wl,-export_dynamic -o host test/ape/dll/host.c
           ./host
+          # the node on this runner is arm64, so the addon it can open is
+          # the one the job below builds, not this one

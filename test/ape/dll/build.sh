@@ -21,6 +21,12 @@
 
 set -eu
 
+# What to build. The test library by default; NAME and SRCS point it at
+# something else, which is how the node addon is built with the same
+# steps rather than a second copy of them.
+NAME=${NAME:-cosmo_dll_test}
+SRCS=${SRCS:-"test/ape/dll/library.c test/ape/dll/exports.S test/ape/dll/exports2.S"}
+
 TARGET=${1:-}
 COSMOCC=${COSMOCC:-.cosmocc/3.9.2}
 OUT=${OUT:-o/dlltest}
@@ -75,12 +81,17 @@ CFLAGS="-DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE ${PIC:--fno-pie} \
 
 # shellcheck disable=SC2086
 $CC $CFLAGS -c -o "$OUT/ape.o" ape/ape.S
-# shellcheck disable=SC2086
-$CC $CFLAGS -c -o "$OUT/exports.o" test/ape/dll/exports.S
-# shellcheck disable=SC2086
-$CC $CFLAGS -c -o "$OUT/exports2.o" test/ape/dll/exports2.S
-# shellcheck disable=SC2086
-$CC $CFLAGS -std=gnu2x -c -o "$OUT/library.o" test/ape/dll/library.c
+MODOBJS=
+for src in $SRCS; do
+  obj="$OUT/$(basename "$src" | tr . _).o"
+  case "$src" in
+    *.c) # shellcheck disable=SC2086
+         $CC $CFLAGS -std=gnu2x -c -o "$obj" "$src" ;;
+    *)   # shellcheck disable=SC2086
+         $CC $CFLAGS -c -o "$obj" "$src" ;;
+  esac
+  MODOBJS="$MODOBJS $obj"
+done
 
 # shellcheck disable=SC2086
 $CC $CFLAGS -std=gnu2x -c -o "$OUT/boot.o" "$BOOTSRC"
@@ -112,10 +123,10 @@ $CC -D__LINKER__ -DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE \
 $LD -static -nostdlib -no-pie -z noexecstack -z norelro \
     -z common-page-size=$PAGE -z max-page-size=$PAGE --gc-sections \
     ${PIC:+--emit-relocs --no-relax --undefined=cosmo_dylib_routine} \
-    -T "$OUT/ape.lds" -o "$OUT/cosmo_dll_test.dbg" \
-    "$OUT/ape.o" "$OUT/exports.o" "$OUT/exports2.o" "$OUT/library.o" $BOOT $THUNK $LIBC
+    -T "$OUT/ape.lds" -o "$OUT/$NAME.dbg" \
+    "$OUT/ape.o" $MODOBJS $BOOT $THUNK $LIBC
 
-$OBJCOPY -S -O binary "$OUT/cosmo_dll_test.dbg" "$OUT/cosmo_dll_test.$SUFFIX"
+$OBJCOPY -S -O binary "$OUT/$NAME.dbg" "$OUT/$NAME.$SUFFIX"
 
 # the export trie, the rebase opcodes and the binds all hold what the
 # link only just decided, in encodings no relocation can carry
@@ -125,7 +136,7 @@ if [ "$SUFFIX" = dylib ]; then
   APEDYLIB=${APEDYLIB:-$OUT/apedylib}
   [ -x "$APEDYLIB" ] ||
     "$COSMOCC/bin/cosmocc" -I. -O2 -o "$APEDYLIB" tool/build/apedylib.c
-  "$APEDYLIB" "$OUT/cosmo_dll_test.$SUFFIX" "$OUT/cosmo_dll_test.dbg"
+  "$APEDYLIB" "$OUT/$NAME.$SUFFIX" "$OUT/$NAME.dbg"
 fi
 
-ls -l "$OUT/cosmo_dll_test.$SUFFIX"
+ls -l "$OUT/$NAME.$SUFFIX"
