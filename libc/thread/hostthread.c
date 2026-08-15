@@ -56,8 +56,12 @@ static struct CosmoTib *__get_tls_here(void) {
     return 0;
   char *base;
   asm("mrs\t%0,tpidrro_el0" : "=r"(base));
-  return ((struct CosmoTib **)((unsigned long)base &
-                               ~7ul))[__cosmo_hosted_tls_key];
+  // what the slot holds is what x28 holds, which is past the end of the
+  // block, the same way __get_tls() reads the register
+  struct CosmoTib *past =
+      ((struct CosmoTib **)((unsigned long)base &
+                            ~7ul))[__cosmo_hosted_tls_key];
+  return past ? past - 1 : 0;
 }
 #endif
 
