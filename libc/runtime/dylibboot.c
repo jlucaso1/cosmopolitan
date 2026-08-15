@@ -213,16 +213,19 @@ int cosmo_dylib_boot(int argc, char **argv, char **envp, long tls_disp) {
   if (hosted_tid)
     atomic_init(&__get_tls_here()->tib_ptid, hosted_tid);
 
+  // the descriptor table, which _init would have set up at priority 305
+  // were cosmo.S linked in. It goes before the constructors because some
+  // of them open files, and an open() with no table behind it writes
+  // through a null pointer.
+  if (_weaken(__init_fds))
+    _weaken(__init_fds)();
+
   // the constructors, which nothing else is going to run: dyld only runs
   // what LC_ROUTINES or __mod_init_func point at, and this emits
-  // neither, on purpose. malloc's dispatch is one of them, so they go
-  // before anything that allocates.
+  // neither, on purpose.
   for (init_f **f = __init_array_start; f < __init_array_end; ++f) {
     (*f)(argc, argv, envp, auxv);
   }
-
-  if (_weaken(__init_fds))
-    _weaken(__init_fds)();
 
   __cosmo_hosted_main_tib = __get_tls_here();
   return 1;
@@ -256,11 +259,17 @@ int (*__ape_pthread_key_create)(unsigned *, void (*)(void *));
 
 void COSMO_DYLIB_ROUTINE(int argc, char **argv, char **envp, char **apple,
                          void *vars) {
-  long disp = 0;
+  // Without a key there is no slot, and booting anyway is worse than not
+  // booting: on x86-64 a displacement of zero means guest mode stays off
+  // and __enable_tls() writes the host's own %gs base, taking libSystem's
+  // thread local storage with it; on arm64 the exported thunks go on
+  // handing out the bootstrap block, so every host thread shares one tib.
+  // Better to leave the library loaded and inert, which a host notices
+  // the first time it calls in, than to break the process it's in.
   unsigned key;
-  if (__ape_pthread_key_create && !__ape_pthread_key_create(&key, 0))
-    disp = (long)key * sizeof(void *);
-  cosmo_dylib_boot(argc, argv, envp, disp);
+  if (!__ape_pthread_key_create || __ape_pthread_key_create(&key, 0))
+    return;
+  cosmo_dylib_boot(argc, argv, envp, (long)key * sizeof(void *));
 }
 
 /**

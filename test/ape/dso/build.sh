@@ -12,14 +12,14 @@
 #                form takes its other path
 #   tlscc        rewrites direct %fs accesses, the inline asm in
 #                __get_tls() among them, into calls to the getters, which
-#                is where hosted mode redirects thread local storage.
-#                MODE=optlinux turns it off, so it's asked for by name
+#                is where hosted mode redirects thread local storage
 #   PKG          the package checker rejects symbols no declared
 #                dependency defines, and this deliberately leaves
 #                __tls_get_addr to the host's dynamic loader
 #
-# Set PICLIB to reuse a libc built earlier, which is worth doing since
-# building it is most of the time here.
+# The first two are what MODE=dso is; see build/config.mk. Set PICLIB to
+# point at a libc built earlier, which is worth doing since building it
+# is most of the time here.
 
 set -eu
 
@@ -30,20 +30,21 @@ SRCS=${SRCS:-test/ape/dso/library.c}
 
 COSMOCC=${COSMOCC:-.cosmocc/3.9.2}
 OUT=${OUT:-o/dsotest}
-MODE=optlinux
+# a mode of its own, so that the -fPIC COSMO_DSO objects never land in an
+# output tree an ordinary build would reuse; see build/config.mk
+MODE=dso
 
 TLSCC=${TLSCC:-build/bootstrap/tlscc}
 FIXUPOBJ=${FIXUPOBJ:-$COSMOCC/bin/fixupobj}
 CC="$COSMOCC/bin/x86_64-linux-cosmo-gcc"
+PICLIB_GIVEN=${PICLIB:-}
 PICLIB=${PICLIB:-o/$MODE/cosmopolitan.a}
 
 mkdir -p "$OUT"
 
-if [ ! -f "$PICLIB" ]; then
+if [ -z "${PICLIB_GIVEN:-}" ]; then
   make -j"$(nproc)" MODE=$MODE \
        TLSCC="$TLSCC" \
-       CONFIG_CCFLAGS+=-fPIC \
-       CONFIG_CPPFLAGS+=-DCOSMO_DSO \
        PKG=test/ape/dso/package.sh \
        "o/$MODE/cosmopolitan.a"
 fi

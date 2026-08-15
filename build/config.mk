@@ -114,6 +114,59 @@ CONFIG_CPPFLAGS += -DNDEBUG -DSYSDEBUG -DSUPPORT_VECTOR=1
 CONFIG_CCFLAGS += -O3 -fmerge-all-constants
 endif
 
+# Shared Library Modes
+#
+# Cosmopolitan as something another program loads, rather than as the
+# program. See test/ape/dll/build.sh and test/ape/dso/build.sh.
+#
+#   - `make MODE=dll`             windows, a PE library
+#   - `make MODE=dylib`           macos, x86-64
+#   - `make MODE=aarch64-dylib`   macos, apple silicon
+#   - `make MODE=dso`             linux, an ELF shared object
+#
+# These have their own modes because they are not the same libc with a
+# flag added: -fPIC changes every object, COSMO_DSO picks the other path
+# through the assembly that can't be written pc relative, and the support
+# vector is decided when the libc is compiled. An archive built for one
+# of them is wrong for the others, and sharing an output tree would let
+# make hand a Windows build objects compiled for dyld, which links and
+# then crashes when the image is slid.
+#
+# Windows is the exception that keeps the full support vector: a PE
+# library holds the whole libc so the test can ask it something only a
+# running runtime can answer, and it needs no PIC since nothing slides it.
+# dll and dylib are the default mode with the library part added, and dso
+# is optlinux with it, which is what each of them used to be spelled as on
+# the command line. Keeping the rest of the flags identical matters more
+# than it looks: dropping optlinux's -mavx changes which ifunc resolvers
+# the libc carries, and their .init fragments write their answers into a
+# GOT that a shared object maps read only.
+ifeq ($(MODE), dll)
+ENABLE_FTRACE = 1
+CONFIG_OFLAGS ?= -g -ggdb
+CONFIG_CCFLAGS += -O2 $(BACKTRACES)
+CONFIG_CPPFLAGS += -DSYSDEBUG
+endif
+ifeq ($(MODE), dylib)
+ENABLE_FTRACE = 1
+CONFIG_OFLAGS ?= -g -ggdb
+CONFIG_CCFLAGS += -O2 $(BACKTRACES) -fPIC
+CONFIG_CPPFLAGS += -DSYSDEBUG -DCOSMO_DSO -DSUPPORT_VECTOR=8
+endif
+ifeq ($(MODE), aarch64-dylib)
+ENABLE_FTRACE = 1
+CONFIG_OFLAGS ?= -g -ggdb
+CONFIG_CCFLAGS += -O2 $(BACKTRACES) -fPIC
+CONFIG_CPPFLAGS += -DSYSDEBUG -DCOSMO_DSO -DSUPPORT_VECTOR=8
+endif
+ifeq ($(MODE), dso)
+CONFIG_OFLAGS ?= -g -ggdb
+CONFIG_CPPFLAGS += -DNDEBUG -DSYSDEBUG -DCOSMO_DSO -DSUPPORT_VECTOR=1
+CONFIG_CCFLAGS += -O3 -fmerge-all-constants -fPIC
+CONFIG_COPTS += -mred-zone
+CONFIG_TARGET_ARCH ?= -mavx
+endif
+
 # Release Mode
 #
 # Follows traditional closed source release binary norms.

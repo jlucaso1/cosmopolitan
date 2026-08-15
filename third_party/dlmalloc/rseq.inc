@@ -88,8 +88,8 @@ static inline void push_chunk(struct Chunk *chunk, unsigned char flindex) {
                "	.quad	302f-301f\n"          // rseq_cs::post_commit_offset
                "	.quad	303f\n"               // rseq_cs::abort_ip
                "	.popsection\n"                //
-               "	lea	300b(%%rip),%%rdx\n"  // pic-safe descriptor address
-               "301:	movq	%%rdx,8(%2)\n"        // rseq->rseq_cs
+               "301:	lea	300b(%%rip),%%rdx\n"  // recomputed on retry: the
+               "	movq	%%rdx,8(%2)\n"        // abort lands back on 301
                "	mov	(%2),%%ecx\n"         // rseq->cpu_id_start
                "	shl	$6,%%ecx\n"           //
                "	mov	(%0,%%rcx),%%rdx\n"   // rdx = freelist
@@ -143,8 +143,8 @@ static inline struct Chunk *pop_chunk(unsigned char flindex) {
                "	.quad	302f-301f\n"          // rseq_cs::post_commit_offset
                "	.quad	303f\n"               // rseq_cs::abort_ip
                "	.popsection\n"                //
-               "	lea	300b(%%rip),%%rdx\n"  // pic-safe descriptor address
-               "301:	movq	%%rdx,8(%1)\n"        // rseq->rseq_cs
+               "301:	lea	300b(%%rip),%%rdx\n"  // recomputed on retry: the
+               "	movq	%%rdx,8(%1)\n"        // abort lands back on 301
                "	mov	(%1),%%ecx\n"         // rseq->cpu_id_start
                "	shl	$6,%%ecx\n"           //
                "	mov	(%2,%%rcx),%0\n"      // chunk = chunks[cpu].freelist

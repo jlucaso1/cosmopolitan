@@ -31,13 +31,17 @@ TARGET=${1:-}
 COSMOCC=${COSMOCC:-.cosmocc/3.9.2}
 OUT=${OUT:-o/dlltest}
 
+# Each target has a mode of its own, because the libc it wants is not the
+# same libc with a flag added: see the shared library modes in
+# build/config.mk. Sharing an output tree between them would let make
+# hand one target the objects it compiled for another.
 case "$TARGET" in
   windows) VECTOR=; SUFFIX=dll;   BOOTSRC=libc/runtime/windllboot.c; PIC=
-           ARCH=x86_64; MODE=; PAGE=4096 ;;
+           ARCH=x86_64; MODE=dll; PAGE=4096 ;;
   macos)   VECTOR=8; SUFFIX=dylib; BOOTSRC=libc/runtime/dylibboot.c; PIC=-fPIC
-           ARCH=x86_64; MODE=; PAGE=4096 ;;
+           ARCH=x86_64; MODE=dylib; PAGE=4096 ;;
   arm64)   VECTOR=8; SUFFIX=dylib; BOOTSRC=libc/runtime/dylibboot.c; PIC=-fPIC
-           ARCH=aarch64; MODE=aarch64; PAGE=16384 ;;
+           ARCH=aarch64; MODE=aarch64-dylib; PAGE=16384 ;;
   *) echo "usage: $0 windows|macos|arm64" >&2; exit 1 ;;
 esac
 
@@ -56,21 +60,17 @@ mkdir -p "$OUT"
 
 # The mach-o side needs a libc built as position independent code, since
 # dyld slides a library wherever it likes and an absolute address in the
-# text would land in whatever happens to be there.
+# text would land in whatever happens to be there. The mode says so, and
+# the mode is also what names the output tree, so this can hand the work
+# to make unconditionally and let it decide what's already built.
 VECTORFLAG=${VECTOR:+-DSUPPORT_VECTOR=$VECTOR}
 LIBC=${LIBC_A:-o/$MODE/cosmopolitan.a}
-if [ ! -f "$LIBC" ]; then
-  if [ -n "$PIC" ]; then
-    # tlscc rewrites direct %fs accesses, which is an x86 concern; the
-    # other architecture keeps its thread pointer in a register
-    make -j"$(nproc)" MODE=$MODE \
-         ${TLSCC:+TLSCC=$TLSCC} \
-         CONFIG_CCFLAGS+=-fPIC \
-         "CONFIG_CPPFLAGS+=-DCOSMO_DSO $VECTORFLAG" \
-         PKG=test/ape/dso/package.sh "$LIBC"
-  else
-    make -j"$(nproc)" MODE=$MODE "$LIBC"
-  fi
+if [ -z "${LIBC_A:-}" ]; then
+  # tlscc rewrites direct %fs accesses, which is an x86 concern; the
+  # other architecture keeps its thread pointer in a register
+  make -j"$(nproc)" MODE=$MODE \
+       ${TLSCC:+TLSCC=$TLSCC} \
+       ${PIC:+PKG=test/ape/dso/package.sh} "$LIBC"
 fi
 
 CFLAGS="-DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE ${PIC:--fno-pie} \

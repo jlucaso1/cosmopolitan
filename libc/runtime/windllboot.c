@@ -138,17 +138,19 @@ __msabi bool cosmo_dll_boot(void) {
   // the linker never pulls it in and their .init fragments never run
   __enable_tls();
 
+  // The descriptor table, which _init would have set up at priority 305
+  // were cosmo.S linked in. It goes before the constructors because some
+  // of them open files, and an open() with no table behind it writes
+  // through a null pointer.
+  if (_weaken(__init_fds))
+    _weaken(__init_fds)();
+
   // The constructors, which nothing else is going to run: a PE image has
   // no equivalent of DT_INIT_ARRAY. They assume a runtime that is
-  // already up, several of them making system calls. malloc is one of
-  // them, and until it runs the allocator is a null pointer, which is
-  // why this goes before anything that allocates.
+  // already up, several of them making system calls.
   for (init_f **f = __init_array_start; f < __init_array_end; ++f) {
     (*f)(1, cosmo_dll_argv, cosmo_dll_environ, 0);
   }
-
-  if (_weaken(__init_fds))
-    _weaken(__init_fds)();
 
   // the plain __get_tls() is a bare %fs read, which is what tlscc exists
   // to rewrite; this file is windows only, so it says so itself
