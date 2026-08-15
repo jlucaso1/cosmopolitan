@@ -49,6 +49,7 @@ extern void _init(void);
 // hosted tls: where the tib sits relative to the host's segment base
 extern long __tls_disp;
 extern char __tls_guest;
+extern bool __cosmo_hosted;
 
 typedef int init_f(int, char **, char **, unsigned long *);
 extern init_f *__init_array_start[];
@@ -69,6 +70,7 @@ void cosmo_dso_noop(void) {
 }
 
 void cosmo_dso_init(int, char **, char **, long);
+static bool find_mapping(uintptr_t, uintptr_t *, uintptr_t *);
 
 // initial-exec, so its displacement from the segment base is fixed and
 // the same for every thread, which is what makes it usable as the slot
@@ -117,11 +119,13 @@ void cosmo_dso_init(int argc, char **argv, char **envp, long tls_disp) {
     return;
   booted = true;
 
-  // Not __cosmo_hosted: what that turns off elsewhere is the memory
-  // manager working out where the main stack is, by reading from
-  // wherever the environment lives. Here the environment is where a
-  // program's would be and the answer is right, and the stack has to be
-  // known or a read() into a buffer on it comes back EFAULT.
+  // What the hosted flag turns off is the memory manager working out
+  // where the main stack is, by reading from wherever the environment
+  // lives. Told where the environment is, that answer is right and worth
+  // having, since the stack has to be known or a read() into a buffer on
+  // it comes back EFAULT. Told nothing, it reads whatever is at hand and
+  // gets an answer that isn't a stack at all, so this says don't.
+  __cosmo_hosted = !envp;
 
   // Some of the fragments below read these, and one of them walks argv,
   // so a host that had nothing to say still has to be given something
@@ -176,6 +180,16 @@ void cosmo_dso_init(int argc, char **argv, char **envp, long tls_disp) {
   // and now the constructors the linker script held back
   for (init_f **f = __init_array_start; f != __init_array_end; ++f)
     (*f)(argc, argv, envp, auxv);
+
+  // If the memory manager was told not to go looking, say where this
+  // thread's stack is outright, the same way an adopted thread does.
+  // Nothing else knows, and a read() into a buffer on it needs someone
+  // to have said.
+  if (__cosmo_hosted) {
+    uintptr_t lo, hi;
+    if (find_mapping((uintptr_t)__builtin_frame_address(0), &lo, &hi))
+      __maps_track((char *)lo, hi - lo, PROT_READ | PROT_WRITE, MAP_NOFORK);
+  }
 }
 
 /**
