@@ -163,6 +163,28 @@ jobs:
           "$CC" -o host.exe test/ape/dll/host.c
           ./host.exe
 
+  macos-arm64:
+    needs: aarch64
+    # The runners are apple silicon, so this one is native, and native
+    # arm64 code has to be signed before the kernel will run it. Ad hoc
+    # is enough: it says the file hasn't been tampered with since, not
+    # who made it.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dylib-arm64
+      - name: load it
+        run: |
+          uname -m
+          file cosmo_dll_test.dylib
+          codesign -s - --force cosmo_dll_test.dylib
+          codesign -dv cosmo_dll_test.dylib 2>&1 | head -5 || true
+          dyld_info -exports cosmo_dll_test.dylib || true
+          clang -o host test/ape/dll/host.c
+          ./host
+
   macos:
     needs: dylib
     # The library ape emits today is x86-64, and the free runners are all

@@ -84,6 +84,15 @@ $CC $CFLAGS -std=gnu2x -c -o "$OUT/library.o" test/ape/dll/library.c
 $CC $CFLAGS -std=gnu2x -c -o "$OUT/boot.o" "$BOOTSRC"
 BOOT="$OUT/boot.o"
 
+# the thunks that hand the thread pointer back and forth are only a
+# thing where the host might be using the register it lives in
+THUNK=
+if [ "$ARCH" = aarch64 ]; then
+  # shellcheck disable=SC2086
+  $CC $CFLAGS -c -o "$OUT/thunk.o" ape/dylibthunk.S
+  THUNK="$OUT/thunk.o"
+fi
+
 $CC -D__LINKER__ -DAPE_DLL $VECTORFLAG -D_COSMO_SOURCE \
     -E -P -xc -nostdinc -iquote. -I. -isystem libc/isystem \
     -o "$OUT/ape.lds" ape/ape.lds
@@ -102,7 +111,7 @@ $LD -static -nostdlib -no-pie -z noexecstack -z norelro \
     -z common-page-size=$PAGE -z max-page-size=$PAGE --gc-sections \
     ${PIC:+--emit-relocs --no-relax --undefined=cosmo_dylib_routine} \
     -T "$OUT/ape.lds" -o "$OUT/cosmo_dll_test.dbg" \
-    "$OUT/ape.o" "$OUT/exports.o" "$OUT/library.o" $BOOT $LIBC
+    "$OUT/ape.o" "$OUT/exports.o" "$OUT/library.o" $BOOT $THUNK $LIBC
 
 $OBJCOPY -S -O binary "$OUT/cosmo_dll_test.dbg" "$OUT/cosmo_dll_test.$SUFFIX"
 

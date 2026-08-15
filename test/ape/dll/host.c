@@ -114,9 +114,17 @@ static void *thread_main(void *arg) {
   return 0;
 }
 
-static void *read_gs(long disp) {
+// Reads the slot the way the guest will, which is the point: if these
+// two disagree the arrangement is no good.
+static void *read_slot(long disp) {
   void *value;
+#ifdef __x86_64__
   asm("mov\t%%gs:(%1),%0" : "=r"(value) : "r"(disp));
+#else
+  char *base;
+  asm("mrs\t%0,tpidrro_el0" : "=r"(base));
+  value = *(void **)(((unsigned long)base & ~7ul) + disp);
+#endif
   return value;
 }
 #endif
@@ -156,12 +164,12 @@ int main(int argc, char **argv) {
   }
   long disp = tls_displacement(key);
   pthread_setspecific(key, (void *)0x1234);
-  if (read_gs(disp) != (void *)0x1234) {
-    printf("FAIL: %%gs%+ld is not where key %d lives\n", disp, (int)key);
+  if (read_slot(disp) != (void *)0x1234) {
+    printf("FAIL: %+ld is not where key %d lives\n", disp, (int)key);
     return 5;
   }
   pthread_setspecific(key, 0);
-  printf("ok: the guest can keep its tib at %%gs%+ld\n", disp);
+  printf("ok: the guest can keep its tib %+ld from the thread pointer\n", disp);
 
   // Nothing here starts the runtime. dyld ran it when the library was
   // loaded, before this program got control back, so what follows is

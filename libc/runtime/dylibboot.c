@@ -239,7 +239,15 @@ int (*__ape_pthread_key_create)(unsigned *, void (*)(void *));
  * that works; a host with opinions about the thread local slot can call
  * cosmo_dylib_boot() itself first, and this finds nothing left to do.
  */
-void cosmo_dylib_routine(int argc, char **argv, char **envp, char **apple,
+#ifdef __x86_64__
+#define COSMO_DYLIB_ROUTINE cosmo_dylib_routine
+#else
+// the thunk in ape/dylibthunk.S wears the name, since this can't run
+// until something has put a thread pointer in the register it reads
+#define COSMO_DYLIB_ROUTINE cosmo_dylib_routine_impl
+#endif
+
+void COSMO_DYLIB_ROUTINE(int argc, char **argv, char **envp, char **apple,
                          void *vars) {
   long disp = 0;
   unsigned key;

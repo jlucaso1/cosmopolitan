@@ -117,12 +117,33 @@ ape_export_index = 0
 //	pointing into a string table by byte offset. That offset isn't
 //	something the assembler can work out across sections, so the
 //	strings are fixed width and the offset falls out of the index.
+#ifdef __aarch64__
+//	Everything a host reaches has to go through one of these. The
+//	thread pointer lives in a register the host is entitled to be using
+//	for its own purposes, so what gets published is a thunk that swaps
+//	it, not the function itself.
+ .section .text.ape.export.\symbol,"ax",@progbits
+	.balign	4
+.Lape.export.\symbol:
+	stp	x29,x30,[sp,#-32]!
+	mov	x29,sp
+	str	x28,[sp,#16]
+	bl	__ape_load_tls
+	bl	\symbol
+	ldr	x28,[sp,#16]
+	ldp	x29,x30,[sp],#32
+	ret
+ .previous
+#define MACHO_EXPORT_ADDRESS(SYMBOL) .Lape.export.\symbol
+#else
+#define MACHO_EXPORT_ADDRESS(SYMBOL) \symbol
+#endif
  .section .macho.linkedit.1.syms.1.\symbol,"a",@progbits
 	.long	1 + ape_export_index * MACHO_STRTAB_STRIDE	// n_strx
 	.byte	0x0f			// n_type: N_SECT|N_EXT
 	.byte	1			// n_sect: __text
 	.short	0			// n_desc
-	.quad	\symbol			// n_value
+	.quad	MACHO_EXPORT_ADDRESS(\symbol)	// n_value
  .previous
  .section .macho.linkedit.2.strs.1.\symbol,"a",@progbits
 	.asciz	"_\symbol"
