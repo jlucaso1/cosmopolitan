@@ -127,13 +127,17 @@ static void cosmo_hosted_thread_fini(void) {
   struct CosmoTib *tib = __get_tls_here();
   if (!tib || tib == __cosmo_hosted_main_tib)
     return;
+  // Order matters. Giving the thread pointer back first would leave
+  // free() with nowhere to look for the heap it's returning memory to,
+  // since that is kept in the block being pointed at.
   void *tls = tib->tib_keys_dynamic;
+  void *heap = tib->tib_malloc;
   intptr_t hand = atomic_load_explicit(&tib->tib_syshand, memory_order_relaxed);
-  tmspace_release(tib->tib_malloc);
+  free(tls);
+  tmspace_release(heap);
   __set_tls(0);
   if (IsWindows() && hand)
     CloseHandle(hand);
-  free(tls);
 }
 
 #if SupportsWindows()
