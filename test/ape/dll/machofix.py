@@ -266,6 +266,20 @@ def main(path, debug):
         )
     )
 
+    # a segment that claims more of the file than the file has is a bus
+    # error the moment dyld touches the end of it
+    for seg in segments:
+        end = seg.fileoff + seg.filesize
+        if end > len(image):
+            raise ValueError(
+                "%s runs to %#x and the file stops at %#x"
+                % (seg.name, end, len(image))
+            )
+        print(
+            "segment %-12s file %#x..%#x  vm %#x..%#x"
+            % (seg.name, seg.fileoff, end, seg.vmaddr, seg.vmaddr + seg.vmsize)
+        )
+
     with open(path, "wb") as f:
         f.write(image)
 

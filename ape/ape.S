@@ -1026,9 +1026,9 @@ ape_macho:
 //	Room for the rebase opcodes, as real bytes rather than a gap in the
 //	layout, since dyld maps what the segment says is there and a file
 //	that stops short of it is a bus error.
-	.section .macho.rebase,"a",@progbits
+	.pushsection .macho.rebase,"a",@progbits
 	.space	APE_MACHO_REBASE_SIZE,0
-	.previous
+	.popsection
 
 //	dlsym() is answered from the export trie, not the symbol table, and
 //	the rebase opcodes are how dyld learns which words hold addresses,
