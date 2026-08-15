@@ -77,10 +77,42 @@ NAPICALL int (*napi_set_named_property_)(napi_env, napi_value, const char *,
 #if SupportsWindows()
 __msabi bool cosmo_dll_boot(void);
 __msabi int cosmo_dll_thread_init(void);
-#define enter_guest() cosmo_dll_thread_init()
+#define ADOPT_THREAD() cosmo_dll_thread_init()
 #else
 int cosmo_dylib_thread_init(void);
-#define enter_guest() cosmo_dylib_thread_init()
+#define ADOPT_THREAD() cosmo_dylib_thread_init()
+#endif
+
+/**
+ * Taking the thread pointer for the duration of a callback.
+ *
+ * An exported function is published as a thunk that does this, but node
+ * doesn't call a callback by name: it calls an address we handed it, and
+ * arrives with whatever it keeps in x28. So a callback swaps the
+ * register itself, and gives it back before returning.
+ *
+ * Everywhere else the thread pointer is a segment register the host was
+ * never using, and there is nothing to hand back.
+ */
+#ifdef __aarch64__
+void __ape_load_tls(void);
+#define ENTER_GUEST()                     \
+  long __host_x28;                        \
+  do {                                    \
+    register long __cur asm("x28");       \
+    asm("" : "=r"(__cur));                \
+    __host_x28 = __cur;                   \
+    ADOPT_THREAD();                       \
+    __ape_load_tls();                     \
+  } while (0)
+#define LEAVE_GUEST()                     \
+  do {                                    \
+    register long __back asm("x28") = __host_x28; \
+    asm volatile("" : "+r"(__back));      \
+  } while (0)
+#else
+#define ENTER_GUEST() ADOPT_THREAD()
+#define LEAVE_GUEST() (void)0
 #endif
 
 /**
@@ -91,7 +123,7 @@ int cosmo_dylib_thread_init(void);
  * just that the file loaded.
  */
 static NAPICALL napi_value Add(napi_env env, napi_callback_info info) {
-  enter_guest();
+  ENTER_GUEST();
   size_t argc = 2;
   napi_value argv[2], out;
   napi_get_cb_info_(env, info, &argc, argv, 0, 0);
@@ -103,6 +135,7 @@ static NAPICALL napi_value Add(napi_env env, napi_callback_info info) {
   int sum = atoi(scratch);
   free(scratch);
   napi_create_int32_(env, sum, &out);
+  LEAVE_GUEST();
   return out;
 }
 
@@ -113,7 +146,7 @@ static NAPICALL napi_value Add(napi_env env, napi_callback_info info) {
  * check that for itself.
  */
 static NAPICALL napi_value Probe(napi_env env, napi_callback_info info) {
-  enter_guest();
+  ENTER_GUEST();
   static char msg[192];
   int n = snprintf(msg, sizeof(msg),
                    "cosmo libc in node: pid=%d tid=%d, heap and system calls "
@@ -121,6 +154,7 @@ static NAPICALL napi_value Probe(napi_env env, napi_callback_info info) {
                    getpid(), gettid());
   napi_value out;
   napi_create_string_utf8_(env, msg, n, &out);
+  LEAVE_GUEST();
   return out;
 }
 
